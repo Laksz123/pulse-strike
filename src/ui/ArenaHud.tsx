@@ -474,7 +474,7 @@ export function ArenaHud({ arena, onAgain }: { arena: React.RefObject<Arena | nu
               Звуки <b>{Math.round(settings.sound * 100)}%</b>
               <input type="range" min="0" max="1" step="0.05" value={settings.sound} onChange={(e) => setSettings({ sound: Number(e.target.value) })} />
             </label>
-            <button className="btn" onClick={() => arena.current?.finish()}>{range ? "Выйти в меню" : "Закончить матч и забрать награду"}</button>
+            <button className="btn danger" onClick={() => arena.current?.leave()}>Выйти в главное меню</button>
             <p className="hint" hidden={TOUCH}>
               <kbd>ЛКМ</kbd> огонь · <kbd>ПКМ</kbd> прицел · <kbd>R</kbd> перезарядка · <kbd>1</kbd> <kbd>2</kbd> <kbd>Q</kbd> оружие · <kbd>3</kbd> нож · <kbd>F</kbd> осмотреть<br />
               <kbd>B</kbd> закупка · <kbd>4</kbd> <kbd>5</kbd> <kbd>6</kbd> гранаты · <kbd>E</kbd> заложить / обезвредить / подобрать · <kbd>G</kbd> бросить бомбу · <kbd>M</kbd> сменить сторону · <kbd>Tab</kbd> таблица

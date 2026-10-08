@@ -13,32 +13,70 @@ export interface KnifePose {
   pitch: number;
   yaw: number;
   roll: number;
-  /** Turn of the blade about its own handle. */
+  /** A turn of the wrist about the handle: the hand goes with it. */
   spin: number;
+  /** What the blade does by itself, in the fingers or out of them: end over end, about its ring, about its handle. */
+  flip: number;
+  ring: number;
+  twirl: number;
+  /** How high it has been thrown above the hand, metres. */
+  toss: number;
+  /** The hand: how far the fingers have let go, and the one finger that keeps hold through a ring. */
+  open: number;
+  hook: number;
 }
 
-/** Where each blade rests: how far it is tipped up, turned in, how high it is held, and how much of its flat is turned to the eye. Negative tilt is a reverse grip. */
-export const HOLD: Record<string, { tilt: number; turn: number; y: number; z: number; flat: number }> = {
-  k_combat: { tilt: 0.95, turn: 0.32, y: 0, z: 0, flat: 0.9 },
-  k_kunai: { tilt: -0.5, turn: 0.5, y: 0.07, z: 0, flat: 0.5 },
-  k_cleaver: { tilt: 0.85, turn: 0.3, y: -0.01, z: 0, flat: 1.1 },
-  k_machete: { tilt: 1.0, turn: 0.28, y: -0.03, z: 0.04, flat: 0.9 },
-  k_karambit: { tilt: -0.55, turn: 0.55, y: 0.08, z: 0, flat: 0.3 },
-  k_butterfly: { tilt: 0.95, turn: 0.32, y: 0, z: 0, flat: 0.9 },
-  k_tomahawk: { tilt: 1.1, turn: 0.3, y: -0.04, z: 0.04, flat: 1.1 },
-  k_katana: { tilt: 1.05, turn: 0.26, y: -0.03, z: 0.07, flat: 0.85 },
-  k_ripper: { tilt: 0.6, turn: 0.3, y: -0.04, z: 0.05, flat: 1.0 },
-  k_saber: { tilt: 1.0, turn: 0.28, y: -0.04, z: 0.06, flat: 0 },
+/** Blades with a ring: where it is on the blade. They are spun on a finger instead of thrown. */
+export const RING: Record<string, [number, number, number]> = { k_karambit: [0, -0.004, 0.092], k_kunai: [0, 0, 0.083] };
+/** Where the rest balance, along the handle: the point they turn about in the air. */
+export const BALANCE: Record<string, number> = { k_combat: -0.05, k_cleaver: -0.09, k_tomahawk: -0.13, k_butterfly: -0.04, k_machete: -0.12, k_katana: -0.16, k_saber: -0.14, k_ripper: -0.1 };
+
+/**
+ * How each blade is held. The arm comes first: a forearm that enters from the lower right, turned
+ * out by `sup` (0 is palm down, a quarter turn is thumb up) with the wrist bent toward the little
+ * finger by `dev`. The blade then lies in that hand — out of the thumb side, or out of the bottom
+ * of the fist for a reverse grip (`rev`) — rolled about its handle by `roll` so its flat shows.
+ * `at` is the point on the handle the hand closes on; `y` and `z` nudge the whole thing in view.
+ */
+export interface Hold {
+  rev?: boolean;
+  sup: number;
+  dev: number;
+  roll: number;
+  at: number;
+  y: number;
+  z: number;
+  x?: number;
+  /** Which way the forearm points, when not the usual. */
+  arm?: [number, number, number];
+}
+// Every blade sits where a blade sits in Counter-Strike: the fist low in the right-hand corner, the
+// point short of the crosshair and to the right of it, nothing across the middle of the picture.
+// Long blades stand up along the right side instead of reaching over the view.
+const SHORT = { arm: [-0.32, 0.08, -0.94] as [number, number, number], sup: 1.01, dev: 0.57, roll: -1.2, x: 0.1, y: -0.075, z: -0.14 };
+const LONG = { arm: [-0.55, -0.1, -0.83] as [number, number, number], sup: 1.75, dev: 0.63, roll: -0.4, x: 0.12, y: -0.09, z: -0.14 };
+const REV = { rev: true, arm: [-0.15, 0.7, -0.7] as [number, number, number], sup: 2.08, dev: -0.16, roll: 0.2, x: 0.09, y: 0, z: -0.14 };
+export const HOLD: Record<string, Hold> = {
+  k_combat: { ...SHORT, at: 0.012 },
+  k_kunai: { ...REV, at: 0.022 },
+  k_cleaver: { ...SHORT, at: 0.012 },
+  k_machete: { ...LONG, at: 0.012 },
+  k_karambit: { ...REV, at: 0.03 },
+  k_butterfly: { ...SHORT, at: 0.02 },
+  k_tomahawk: { ...SHORT, sup: 1.15, roll: -1.1, y: -0.08, at: 0.03 },
+  k_katana: { ...LONG, sup: 1.86, dev: 0.62, roll: -0.3, at: 0.02 },
+  k_ripper: { ...LONG, at: 0.02 },
+  k_saber: { ...LONG, sup: 1.86, dev: 0.62, roll: -0.3, at: 0.02 },
 };
 
 /** How each blade is shown off: end-over-end flips in the toss, turns about the handle, and a shake for the ones with a motor. */
 const SHOW: Record<string, { flips: number; twirl: number; shake: number; slow?: boolean }> = {
-  k_combat: { flips: 1, twirl: 0, shake: 0 },
-  k_kunai: { flips: 4, twirl: 0, shake: 0 },
+  k_combat: { flips: 2, twirl: 0, shake: 0 },
+  k_kunai: { flips: 5, twirl: 0, shake: 0 },
   k_cleaver: { flips: 2, twirl: 0, shake: 0 },
   k_machete: { flips: 0, twirl: 2, shake: 0 },
-  k_karambit: { flips: 5, twirl: 0, shake: 0 },
-  k_butterfly: { flips: 1, twirl: 1, shake: 0 },
+  k_karambit: { flips: 6, twirl: 0, shake: 0 },
+  k_butterfly: { flips: 1, twirl: 0, shake: 0 },
   k_tomahawk: { flips: 2, twirl: 0, shake: 0 },
   k_katana: { flips: 0, twirl: 0, shake: 0, slow: true },
   k_ripper: { flips: 0, twirl: 0, shake: 1 },
@@ -69,15 +107,29 @@ const span = (u: number, a: number, b: number) => Math.max(0, Math.min(1, (u - a
 const mix = (a: number, b: number, k: number) => a + (b - a) * k;
 
 export function knifePose(id: string, move: KnifeMove | null, u: number, side: number, t: number): KnifePose {
-  const p: KnifePose = { x: 0, y: 0, z: 0, pitch: 0, yaw: 0, roll: 0, spin: 0 };
+  const p: KnifePose = { x: 0, y: 0, z: 0, pitch: 0, yaw: 0, roll: 0, spin: 0, flip: 0, ring: 0, twirl: 0, toss: 0, open: 0, hook: 0 };
+  const ringed = !!RING[id];
   if (!move) return p;
   if (move === "draw") {
     // Up from below, each in its own way: a turn of the wrist, a flip, a pull from the sheath, a tug on the cord.
     const d = DRAW[id] ?? DRAW.k_combat;
     const k = 1 - (1 - u) ** 3;
     p.y = -0.32 * (1 - k) + (d.jerk ? Math.sin(u * Math.PI * 3) * 0.035 * (1 - u) : 0);
-    p.pitch = -1.0 * (1 - k) * (d.pull ? 0.3 : 1) + d.flips * Math.PI * 2 * (1 - smooth(span(u, 0, 0.8)));
-    p.spin = (1 - k) * Math.PI * 2 * d.spins;
+    p.pitch = -1.0 * (1 - k) * (d.pull ? 0.3 : 1);
+    // The hand comes up and the blade arrives in it still turning: round a finger, end over end, or about its handle.
+    const turning = 1 - smooth(span(u, 0, 0.82));
+    const loose = Math.sin(span(u, 0, 0.86) * Math.PI) ** 0.6;
+    if (ringed) {
+      p.ring = -d.flips * Math.PI * 2 * turning;
+      p.open = 0.5 * loose;
+      p.hook = 0.85 * loose;
+    } else if (d.flips) {
+      p.flip = -d.flips * Math.PI * 2 * turning;
+      p.toss = Math.sin(span(u, 0, 0.82) * Math.PI) * 0.07;
+      p.open = loose;
+    }
+    p.twirl = turning * Math.PI * 2 * d.spins;
+    if (d.spins && !d.flips) p.open = 0.45 * loose;
     p.roll = 0.5 * (1 - k) + (d.jerk ? Math.sin(u * 60) * 0.03 * span(u, 0.4, 0.6) : 0);
     p.z = (d.pull ?? 0) * (1 - smooth(span(u, 0.1, 0.75)));
     p.x = (d.pull ?? 0) * 0.3 * (1 - smooth(span(u, 0.1, 0.75)));
@@ -127,12 +179,33 @@ export function knifePose(id: string, move: KnifeMove | null, u: number, side: n
   const a = smooth(span(u, 0.12, 0.26));
   const toss = span(u, show.slow ? 0.46 : 0.4, show.slow ? 0.56 : 0.62);
   const b = smooth(span(u, 0.62, 0.74));
-  p.x = -0.15 * inK;
-  p.y = 0.05 * inK + Math.sin(toss * Math.PI) * (show.flips ? 0.11 : 0.02) + Math.sin(t * 2.2) * 0.006 * inK;
-  p.z = 0.1 * inK;
-  p.yaw = 0.45 * inK;
-  p.spin = (mix(0, 1.35, a) + mix(0, -2.7, b)) * (1 - smooth(span(u, 0.86, 1))) + show.twirl * Math.PI * 2 * smooth(toss);
-  p.pitch = show.flips * Math.PI * 2 * smooth(toss) + Math.sin(t * 1.7) * 0.05 * inK;
+  // Looked over, it comes up out of its corner toward the middle and nearer the eye.
+  p.x = -0.19 * inK;
+  p.y = (RING[id] ? 0.03 : 0.11) * inK + Math.sin(toss * Math.PI) * (show.flips && !RING[id] ? 0.03 : 0.01) + Math.sin(t * 2.2) * 0.006 * inK;
+  p.z = 0.13 * inK;
+  p.yaw = 0.3 * inK;
+  p.spin = (mix(0, 1.35, a) + mix(0, -2.7, b)) * (1 - smooth(span(u, 0.86, 1)));
+  p.pitch = Math.sin(t * 1.7) * 0.05 * inK;
+  // The trick in the middle belongs to the blade, not the arm: the hand opens and stays where it is.
+  const air = Math.sin(toss * Math.PI);
+  const loose = Math.min(1, air * 2.2);
+  p.twirl = show.twirl * Math.PI * 2 * smooth(toss);
+  if (ringed) {
+    // Round the finger: fast at first, then slowing until the handle drops back into the palm.
+    p.ring = -show.flips * Math.PI * 2 * (1 - (1 - toss) ** 2.2);
+    p.open = 0.5 * loose;
+    p.hook = 0.85 * loose;
+    p.pitch += 0.18 * air;
+    // The wrist comes back level for it and the hand drops a little, so the blade goes round in full view.
+    p.spin *= 1 - loose;
+    p.y -= 0.06 * loose;
+  } else if (show.flips) {
+    p.flip = -show.flips * Math.PI * 2 * smooth(toss);
+    p.toss = air * 0.1;
+    p.open = 0.8 * loose;
+    // The hand gives it a lift and comes down to meet it.
+    p.pitch += 0.3 * Math.sin(toss * Math.PI * 2) * (toss < 0.5 ? 1 : 0.5);
+  } else if (show.twirl) p.open = 0.45 * loose;
   p.roll = Math.sin(t * 1.3) * 0.06 * inK + (show.shake ? Math.sin(t * 61) * 0.035 * span(u, 0.2, 0.3) * (1 - span(u, 0.76, 0.84)) : 0);
   return p;
 }

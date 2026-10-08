@@ -5,11 +5,11 @@
  * where they can walk, and the firing range.
  */
 
-import RAPIER from "@dimforge/rapier3d-compat";
+import { RAPIER } from "../physics";
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { LIGHT } from "../device";
-import { pbr } from "./models";
+import { coarse, pbr } from "./models";
 import { neon } from "./neon";
 import { oasis } from "./oasis";
 import * as P from "./props";
@@ -844,7 +844,8 @@ export function buildMap(id: MapId, scene: THREE.Scene, world: RAPIER.World): Ar
     k.splats(10);
     return { id, name: "Полигон", nav: k.nav, half: [hx, hz], spawns: [[{ x: -27, z: 0 }], [{ x: -27, z: 0 }]], ffa: [{ x: -27, z: 0 }], sites: [], range: data, floorAt: k.floorAt };
   }
-  const spec = BUILDERS[id](k);
+  // The world is seen from a distance: its round things are cut coarser than what is held in the hands.
+  const spec = coarse(() => BUILDERS[id](k));
   for (const s of spec.sites) k.site(s);
   k.finish();
   k.splats(22);

@@ -7,7 +7,7 @@
  * soon as it lands). Also here: `Puffs`, the little clouds kicked up by running feet and bounces.
  */
 
-import RAPIER from "@dimforge/rapier3d-compat";
+import { RAPIER } from "../physics";
 import * as THREE from "three";
 import { sfx } from "../game/audio";
 import type { Actor } from "./paint";

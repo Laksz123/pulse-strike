@@ -80,12 +80,34 @@ function bodyMaterial(p: Pattern): THREE.MeshStandardMaterial {
 // ---------------------------------------------------------------------------------------------
 // Geometry helpers
 
+/**
+ * How finely round things are cut. What is seen up close — the weapon in the hands, the agent in
+ * the lobby, an icon — gets every facet. The world, seen from across a street, is built inside
+ * `coarse()` with about a third of them: it looks the same from there and draws three times faster.
+ */
+let fine = true;
+export function coarse<T>(make: () => T): T {
+  const was = fine;
+  fine = false;
+  try {
+    return make();
+  } finally {
+    fine = was;
+  }
+}
+
+/** Whether round things are being cut fine right now. */
+export const isFine = () => fine;
+
 const geos = new Map<string, THREE.BufferGeometry>();
 function geo<T extends THREE.BufferGeometry>(key: string, make: () => T): T {
-  let g = geos.get(key) as T | undefined;
-  if (!g) geos.set(key, (g = make()));
+  const k = fine ? key : `lo:${key}`;
+  let g = geos.get(k) as T | undefined;
+  if (!g) geos.set(k, (g = make()));
   return g;
 }
+/** Sides of a tube: halved for the world, but never fewer than eight. */
+const around = (sides: number) => (fine ? sides : Math.max(8, Math.round(sides * 0.5)));
 
 function add(parent: THREE.Object3D, g: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number): THREE.Mesh {
   const mesh = new THREE.Mesh(g, m);
@@ -99,41 +121,41 @@ function add(parent: THREE.Object3D, g: THREE.BufferGeometry, m: THREE.Material,
 /** Rounded box centred at (x, y, z). */
 export function rb(p: THREE.Object3D, w: number, h: number, d: number, x: number, y: number, z: number, m: THREE.Material, r = 0.012): THREE.Mesh {
   const rr = Math.min(r, w / 2.01, h / 2.01, d / 2.01);
-  return add(p, geo(`rb:${w}:${h}:${d}:${rr}`, () => new RoundedBoxGeometry(w, h, d, 3, rr)), m, x, y, z);
+  return add(p, geo(`rb:${w}:${h}:${d}:${rr}`, () => new RoundedBoxGeometry(w, h, d, fine ? 3 : 2, rr)), m, x, y, z);
 }
 
 /** Tube along Z, centred at (x, y, z); `r2` makes it a cone. */
 export function tz(p: THREE.Object3D, r: number, len: number, x: number, y: number, z: number, m: THREE.Material, r2 = r, sides = 24): THREE.Mesh {
-  const mesh = add(p, geo(`cy:${r}:${r2}:${len}:${sides}`, () => new THREE.CylinderGeometry(r2, r, len, sides)), m, x, y, z);
+  const mesh = add(p, geo(`cy:${r}:${r2}:${len}:${sides}`, () => new THREE.CylinderGeometry(r2, r, len, around(sides))), m, x, y, z);
   mesh.rotation.x = -Math.PI / 2;
   return mesh;
 }
 
 /** Upright tube. */
 export function ty(p: THREE.Object3D, r: number, len: number, x: number, y: number, z: number, m: THREE.Material, r2 = r, sides = 24): THREE.Mesh {
-  return add(p, geo(`cy:${r}:${r2}:${len}:${sides}`, () => new THREE.CylinderGeometry(r2, r, len, sides)), m, x, y, z);
+  return add(p, geo(`cy:${r}:${r2}:${len}:${sides}`, () => new THREE.CylinderGeometry(r2, r, len, around(sides))), m, x, y, z);
 }
 
 /** Tube across, along X: screws, axles, drums seen from the side. */
 export function tx(p: THREE.Object3D, r: number, len: number, x: number, y: number, z: number, m: THREE.Material, sides = 20): THREE.Mesh {
-  const mesh = add(p, geo(`cy:${r}:${r}:${len}:${sides}`, () => new THREE.CylinderGeometry(r, r, len, sides)), m, x, y, z);
+  const mesh = add(p, geo(`cy:${r}:${r}:${len}:${sides}`, () => new THREE.CylinderGeometry(r, r, len, around(sides))), m, x, y, z);
   mesh.rotation.z = Math.PI / 2;
   return mesh;
 }
 
 export function sph(p: THREE.Object3D, r: number, x: number, y: number, z: number, m: THREE.Material, sx = 1, sy = 1, sz = 1): THREE.Mesh {
-  const mesh = add(p, geo(`sp:${r}`, () => new THREE.SphereGeometry(r, 24, 18)), m, x, y, z);
+  const mesh = add(p, geo(`sp:${r}`, () => (fine ? new THREE.SphereGeometry(r, 24, 18) : r > 0.09 ? new THREE.SphereGeometry(r, 16, 11) : new THREE.SphereGeometry(r, 10, 7))), m, x, y, z);
   mesh.scale.set(sx, sy, sz);
   return mesh;
 }
 
 /** Ring around the Z axis. */
 export function ring(p: THREE.Object3D, R: number, r: number, x: number, y: number, z: number, m: THREE.Material): THREE.Mesh {
-  return add(p, geo(`to:${R}:${r}`, () => new THREE.TorusGeometry(R, r, 10, 28)), m, x, y, z);
+  return add(p, geo(`to:${R}:${r}`, () => (fine ? new THREE.TorusGeometry(R, r, 10, 28) : new THREE.TorusGeometry(R, r, 6, 14))), m, x, y, z);
 }
 
 export function capsule(p: THREE.Object3D, r: number, len: number, x: number, y: number, z: number, m: THREE.Material): THREE.Mesh {
-  return add(p, geo(`ca:${r}:${len}`, () => new THREE.CapsuleGeometry(r, len, 8, 18)), m, x, y, z);
+  return add(p, geo(`ca:${r}:${len}`, () => (fine ? new THREE.CapsuleGeometry(r, len, 8, 18) : new THREE.CapsuleGeometry(r, len, 4, 10))), m, x, y, z);
 }
 
 export type Pt = [number, number];
@@ -208,6 +230,7 @@ export function outline(root: THREE.Object3D, thickness: number): void {
   for (const mesh of targets) {
     const shell = new THREE.Mesh(mesh.geometry, material);
     shell.userData.outline = true;
+    shell.userData.shell = true;
     mesh.add(shell);
   }
 }
@@ -1093,10 +1116,20 @@ export interface Arms {
   seat: THREE.Vector3;
   /** Something loose to load with, for weapons whose feed stays in: a shell in the palm. */
   item: THREE.Object3D | null;
+  /** A blade, apart from the hand that holds it, so it can turn and fly while the hand stays where it is. */
+  blade: THREE.Group | null;
+  /** Opens the fingers round a blade: `open` 0..1 for the hand, `hook` 0..1 for the one finger (`hookAt`) that keeps hold. */
+  grip: ((open: number, hook: number, hookAt: number) => void) | null;
 }
 
 /** First-person arms: gloved hands that close on the weapon, sleeves in the agent's colours. */
-export function buildArms(model: MarkerModel, sleeve: number, glove: number, team: number, melee: boolean): Arms {
+/** Where a handle lies in the closed hand, in the hand's own space: across the palm, in the crook of the fingers. */
+export const GRIP_AT = new THREE.Vector3(0, 0.078, -0.04);
+/** Where a ring sits on the forefinger when a blade is spun on it, and which way that finger points. */
+export const RING_AT = new THREE.Vector3(-0.031, 0.123, -0.009);
+export const RING_DIR = new THREE.Vector3(0, 0.955, -0.296).normalize();
+
+export function buildArms(model: MarkerModel, sleeve: number, glove: number, team: number, melee: boolean, bend = 0.5): Arms {
   const arms = new THREE.Group();
   const gl = pbr(glove, 0, 0.55);
   const dark = pbr(new THREE.Color(glove).multiplyScalar(0.7).getHex(), 0, 0.6);
@@ -1146,20 +1179,137 @@ export function buildArms(model: MarkerModel, sleeve: number, glove: number, tea
   const seat = new THREE.Vector3();
   if (model.grab) grab.fromArray(model.grab);
   if (model.mag) seat.copy(model.mag.position);
+  let blade: THREE.Group | null = null;
+  let grip: Arms["grip"] = null;
   if (melee) {
-    // A hammer grip on a handle that lies along Z: fingers underneath, thumb along the top.
-    const h = new THREE.Group();
-    h.position.set(0, -0.002, 0.012);
-    arms.add(h);
-    rb(h, 0.07, 0.078, 0.098, 0.003, 0, 0, gl, 0.028);
-    for (let i = 0; i < 4; i++) {
-      rb(h, 0.076, 0.03, 0.021, -0.003, -0.03, -0.036 + i * 0.0238, gl, 0.0095);
-      sph(h, 0.0125, -0.038, -0.008, -0.036 + i * 0.0238, gl);
-      sph(h, 0.011, 0.03, -0.04, -0.036 + i * 0.0238, dark);
-    }
-    capsule(h, 0.0135, 0.05, -0.024, 0.036, -0.02, gl).rotation.x = Math.PI / 2;
-    rb(h, 0.05, 0.012, 0.07, 0.006, 0.041, 0.004, plate, 0.005);
-    forearm(arms, new THREE.Vector3(0.014, -0.03, 0.072), new THREE.Vector3(0.16, -0.5, 0.85));
+    // The blade gets a group of its own, so it can spin in the fingers and leave the hand.
+    blade = new THREE.Group();
+    while (model.group.children.length) blade.add(model.group.children[0]);
+    model.group.add(blade);
+    // A right hand, built the way a hand is: the wrist at the origin, the fingers along +Y, the
+    // thumb on -X, the back of the hand facing +Z. It closes round a handle that lies across the
+    // palm at GRIP_AT; whoever holds a blade puts the blade there, not the other way round.
+    const h = arms;
+    const limb = (into: THREE.Object3D, a: THREE.Vector3, b: THREE.Vector3, r: number, m: THREE.Material) => {
+      const d = b.clone().sub(a);
+      const o = capsule(into, r, Math.max(0.001, d.length()), 0, 0, 0, m);
+      o.position.copy(a).addScaledVector(d, 0.5);
+      o.quaternion.setFromUnitVectors(up, d.normalize());
+      return o;
+    };
+    const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+    // The wrist, the palm, the heel of the hand and the pad under the fingers.
+    rb(h, 0.064, 0.04, 0.042, 0, 0.004, -0.002, gl, 0.017);
+    rb(h, 0.09, 0.076, 0.038, 0, 0.057, 0, gl, 0.017);
+    rb(h, 0.036, 0.056, 0.03, 0.03, 0.036, -0.012, gl, 0.014);
+    rb(h, 0.078, 0.024, 0.016, 0, 0.082, -0.014, dark, 0.007);
+    // The back of the glove: a hard shell in two pieces, a team mark, a strap over the wrist with its buckle.
+    rb(h, 0.064, 0.03, 0.011, 0.001, 0.066, 0.02, plate, 0.006);
+    rb(h, 0.052, 0.024, 0.011, 0.001, 0.036, 0.021, plate, 0.006);
+    rb(h, 0.026, 0.012, 0.005, 0.001, 0.036, 0.0275, band, 0.0024);
+    rb(h, 0.074, 0.02, 0.05, 0, 0.006, -0.002, dark, 0.008);
+    rb(h, 0.02, 0.024, 0.008, -0.012, 0.006, 0.024, plate, 0.003);
+    for (const x of [-0.03, 0.03]) capsule(h, 0.004, 0.05, x, 0.052, 0.0195, dark);
+    // What makes it a glove and not a mitten: a bar over the knuckles, vents and bolts in the shell,
+    // a tab on the strap, stitching, and padding on the palm that shows when the hand opens.
+    rb(h, 0.084, 0.013, 0.012, 0, 0.091, 0.013, plate, 0.006);
+    for (const x of [-0.017, 0, 0.017]) rb(h, 0.011, 0.0045, 0.004, x + 0.001, 0.07, 0.0245, dark, 0.0018);
+    for (const [x, y] of [[-0.026, 0.076], [0.028, 0.076], [-0.02, 0.027], [0.022, 0.027]]) sph(h, 0.0026, x, y, 0.0262, CHROME());
+    rb(h, 0.02, 0.017, 0.006, 0.026, 0.006, 0.0235, band, 0.0025);
+    for (let i = 0; i < 5; i++) rb(h, 0.0022, 0.005, 0.002, -0.03 + i * 0.006, 0.0165, 0.0235, plate, 0.001);
+    rb(h, 0.072, 0.03, 0.007, 0, 0.056, -0.0185, dark, 0.003);
+    rb(h, 0.03, 0.034, 0.007, 0.024, 0.026, -0.0245, dark, 0.003);
+    for (const x of [-0.024, 0, 0.024]) rb(h, 0.002, 0.026, 0.002, x, 0.056, -0.0225, plate, 0.001);
+    // Four fingers of three joints each. A knuckle guard sits on every first joint, a plate on the back of every first bone.
+    const MCP = [[-0.031, 0.094], [-0.0105, 0.099], [0.0105, 0.096], [0.0305, 0.087]];
+    const LEN = [[0.048, 0.03, 0.025], [0.052, 0.033, 0.026], [0.048, 0.031, 0.025], [0.038, 0.024, 0.022]];
+    const fingers: THREE.Group[][] = [];
+    MCP.forEach(([x, y], i) => {
+      const r0 = i === 3 ? 0.0102 : 0.0114;
+      const joints: THREE.Group[] = [];
+      let parent: THREE.Object3D = h;
+      let at = V(x, y, 0);
+      LEN[i].forEach((len, n) => {
+        const r = r0 - n * 0.0007;
+        const g = new THREE.Group();
+        g.position.copy(at);
+        parent.add(g);
+        sph(g, r + 0.0012, 0, 0, 0, gl);
+        capsule(g, r, len - r * 0.6, 0, len / 2, 0, n === 2 ? dark : gl);
+        if (n === 0) {
+          sph(g, r + 0.0022, 0, -0.001, 0.0045, plate, 1, 0.9, 0.75);
+          rb(g, r * 1.5, len * 0.5, 0.006, 0, len * 0.52, r * 0.82, plate, 0.0028);
+        } else if (n === 1) rb(g, r * 1.3, len * 0.5, 0.005, 0, len * 0.5, r * 0.8, dark, 0.0022);
+        else {
+          sph(g, r * 0.92, 0, len - r * 0.5, -r * 0.3, gl, 1, 1, 0.8);
+          rb(g, r * 1.25, len * 0.62, 0.004, 0, len * 0.58, -r * 0.84, plate, 0.002);
+        }
+        // A seam round the finger short of each joint.
+        if (n < 2) ring(g, r + 0.0006, 0.0013, 0, len * 0.84, 0, dark).rotation.x = Math.PI / 2;
+        joints.push(g);
+        parent = g;
+        at = V(0, len, 0);
+      });
+      fingers.push(joints);
+    });
+    // The thumb: the ball of it, then two bones that lie across the front of the closed fingers.
+    const thumb = new THREE.Group();
+    thumb.position.set(-0.034, 0.022, -0.012);
+    h.add(thumb);
+    sph(thumb, 0.0185, 0.002, 0.004, 0, gl, 1, 1.15, 0.95);
+    limb(thumb, V(0, 0, 0), V(-0.017, 0.03, -0.022), 0.0158, gl);
+    const t1 = new THREE.Group();
+    t1.position.set(-0.017, 0.03, -0.022);
+    thumb.add(t1);
+    sph(t1, 0.0152, 0, 0, 0, gl);
+    limb(t1, V(0, 0, 0), V(0.019, 0.01, -0.03), 0.013, gl);
+    rb(t1, 0.014, 0.012, 0.02, 0.006, 0.014, -0.012, plate, 0.004).lookAt(V(0.019, 0.01, -0.03).multiplyScalar(4));
+    const t2 = new THREE.Group();
+    t2.position.set(0.019, 0.01, -0.03);
+    t1.add(t2);
+    sph(t2, 0.0136, 0, 0, 0, gl);
+    limb(t2, V(0, 0, 0), V(0.024, 0.008, -0.007), 0.0118, dark);
+    rb(t2, 0.016, 0.004, 0.012, 0.014, 0.014, -0.004, plate, 0.002).rotation.z = 0.32;
+    // Closed, a finger wraps the handle; open, it is all but straight; hooked, it points — through a ring.
+    const SHUT = [1.25, 1.1, 1.0];
+    const OPEN = [0.3, 0.28, 0.18];
+    const HOOK = [0.28, 0.16, 0.1];
+    grip = (open, hook, hookAt) => {
+      fingers.forEach((f, i) => {
+        const to = i === hookAt ? HOOK : OPEN;
+        const k = i === hookAt ? hook : open;
+        // The little finger shuts a touch tighter, the forefinger a touch looser: a fist is not a block.
+        const tight = i === 3 ? 0.12 : i === 0 ? -0.06 : 0;
+        for (let n = 0; n < 3; n++) f[n].rotation.x = -(SHUT[n] + tight + (to[n] - SHUT[n] - tight) * k);
+      });
+      const o = Math.max(open, hook * 0.8);
+      thumb.rotation.set(0.25 * o, 0, 0.55 * o);
+      t1.rotation.set(0, -0.5 * o, 0.35 * o);
+      t2.rotation.y = -0.3 * o;
+    };
+    grip(0, 0, -1);
+    // The forearm leaves the wrist bent toward the little finger by `bend`: that is how a blade is pointed.
+    const arm = new THREE.Group();
+    arm.rotation.z = Math.PI + bend;
+    h.add(arm);
+    const tube = (r1: number, r2: number, len: number, at: number, m: THREE.Material, squash = 0.86) => {
+      const o = new THREE.Mesh(new THREE.CylinderGeometry(r2, r1, len, 22), m);
+      o.position.y = at + len / 2;
+      o.scale.z = squash;
+      arm.add(o);
+    };
+    tube(0.033, 0.036, 0.03, -0.006, dark);
+    tube(0.035, 0.05, 0.46, 0.022, sl);
+    tube(0.0385, 0.0405, 0.03, 0.05, band);
+    tube(0.0365, 0.0375, 0.012, 0.03, plate);
+    tube(0.0415, 0.043, 0.008, 0.092, dark);
+    tube(0.0375, 0.039, 0.006, 0.105, dark);
+    tube(0.045, 0.0465, 0.006, 0.2, dark);
+    // A patch on the sleeve and a pull-tab on the cuff.
+    rb(arm, 0.03, 0.05, 0.006, 0, 0.155, 0.0355, plate, 0.003);
+    rb(arm, 0.022, 0.012, 0.004, 0, 0.165, 0.039, band, 0.002);
+    rb(arm, 0.022, 0.004, 0.004, 0, 0.145, 0.039, CHROME(), 0.0015);
+    rb(arm, 0.012, 0.022, 0.005, 0.03, 0.03, 0.02, band, 0.002);
   } else {
     fist(new THREE.Vector3(0.002, -0.064, 0.012), 1, new THREE.Vector3(0.2, -0.52, 0.83));
     if (model.muzzle2) fist(new THREE.Vector3(-0.298, -0.064, 0.012), -1, new THREE.Vector3(-0.2, -0.52, 0.83));
@@ -1193,9 +1343,9 @@ export function buildArms(model: MarkerModel, sleeve: number, glove: number, tea
     o.castShadow = false;
     o.receiveShadow = false;
   });
-  outline(arms, 0.004);
+  outline(arms, 0.0055);
   model.group.add(arms);
-  return { group: arms, left, rest, grab, seat, item };
+  return { group: arms, left, rest, grab, seat, item, blade, grip };
 }
 
 /**

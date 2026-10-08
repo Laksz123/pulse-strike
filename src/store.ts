@@ -14,12 +14,14 @@ import {
 import {
   ARMOR_SLOTS, ITEMS, RES, isGun, itemColor, itemValue, newGun, newItem, type Item, type ResId,
 } from "./game/items";
-import { AGENTS, AGENT_BY_ID, AGENT_CHANCE, newAgent, rollAgent, type AgentItem } from "./arena/agents";
-import { CASE_PACKS, dailyOffers } from "./arena/shop";
+import { AGENTS, AGENT_BY_ID, newAgent, type AgentItem } from "./arena/agents";
+import { CASE_BY_ID, levelCase, rollFrom } from "./arena/cases";
+import { WHEEL, spinWheel } from "./arena/gift";
+import { dailyOffers } from "./arena/shop";
 import type { MapId } from "./arena/map";
-import { MARKERS, MARKER_BY_ID, PATTERNS, newMarker, rollCase, type MarkerItem } from "./arena/markers";
+import { MARKERS, MARKER_BY_ID, PATTERNS, newMarker, type MarkerItem } from "./arena/markers";
 import {
-  MISSION_BY_ID, PASS_FREE, PASS_PREMIUM, SEASON, dailyMissions, passLevel, rewardName, today, type PassEvent, type Reward,
+  MISSION_BY_ID, PASS_FREE, PASS_PREMIUM, SEASON, dailyMissions, passLevel, rewardName, today, type PassEvent, type Reward, SEASON_MISSIONS,
 } from "./arena/pass";
 import type { Drop } from "./game/loot";
 import { GUN_UPGRADE, OFFERS, RECIPE_BY_ID, type Recipe } from "./game/recipes";
@@ -78,6 +80,8 @@ export interface Profile {
   /** The shooter: weapon skins owned, unopened cases, and which skin each weapon wears (weapon id to item uid). */
   markers: MarkerItem[];
   loadout: (string | null)[];
+  /** Unopened cases: how many of each kind, and the total. */
+  crates: Record<string, number>;
   cases: number;
   equipped: Record<string, string>;
   /** Agents owned and the one in use. */
@@ -95,11 +99,15 @@ export interface Profile {
   listed: Listed[];
   /** Which of the day's shop offers have been bought. */
   shop: { day: string; bought: string[] };
+  /** The welcome wheel has been spun. */
+  gift: boolean;
 }
 
 export interface Missions {
   day: string;
+  /** The day's three, and the season's long ones. */
   list: { id: string; n: number; claimed: boolean }[];
+  season: { id: string; n: number; claimed: boolean }[];
 }
 
 /** An item of the player's on the market. `sig` is the listing transaction. */
@@ -217,9 +225,10 @@ interface State extends Profile {
   wallet: string | null;
 
   /** Opens one case; returns what dropped, or null when there are none. */
-  openCase(): CaseDrop | null;
-  /** Buys a pack of cases from the shop. */
-  buyCases(n: number): void;
+  /** Opens one case of a kind the player has. */
+  openCase(id: string): CaseDrop | null;
+  /** Buys cases of a kind for coins. */
+  buyCase(id: string, n?: number): boolean;
   /** Buys one of today's offers. */
   buyOffer(key: string): void;
   /** Puts a skin on its weapon; calling it again takes it off. */
@@ -232,6 +241,8 @@ interface State extends Profile {
   claimMission(id: string): void;
   /** Hands the player a reward: from the pass, the market or a purchase. */
   grant(r: Reward, serial?: number): void;
+  /** The welcome wheel: spins it once, hands over the prize and says which one it was (-1 if it has been spun already). */
+  spinGift(): number;
   /** For testing and showing off: every weapon in every skin and every agent the player does not have yet. */
   unlockAll(quiet?: boolean): void;
   setScreen(s: Screen): void;
@@ -290,16 +301,27 @@ function pickContracts(rep: number, have: ActiveContract[]): ActiveContract[] {
   return out;
 }
 
-function freshMissions(): Missions {
+function freshMissions(season?: Missions["season"]): Missions {
   const day = today();
-  return { day, list: dailyMissions(day).map((id) => ({ id, n: 0, claimed: false })) };
+  return {
+    day,
+    list: dailyMissions(day).map((id) => ({ id, n: 0, claimed: false })),
+    // The season's missions carry on from day to day.
+    season: SEASON_MISSIONS.map((m) => season?.find((x) => x.id === m.id) ?? { id: m.id, n: 0, claimed: false }),
+  };
+}
+
+/** Cases by kind, with the total kept beside them. */
+function withCrates(crates: Record<string, number>): { crates: Record<string, number>; cases: number } {
+  const clean = Object.fromEntries(Object.entries(crates).filter(([id, n]) => CASE_BY_ID[id] && n > 0));
+  return { crates: clean, cases: Object.values(clean).reduce((a, b) => a + b, 0) };
 }
 
 function freshProfile(): Profile {
-  const byte = newAgent("byte", true);
+  const rookie = newAgent("rookie", true);
   return {
-    markers: [], loadout: [null, null, null], cases: 2, equipped: {},
-    agents: [byte, newAgent("rookie", true), newAgent("rush", true)], agent: byte.uid, knife: "",
+    markers: [], loadout: [null, null, null], ...withCrates({ starter: 1, neon: 1 }), equipped: {},
+    agents: [rookie, newAgent("rush", true)], agent: rookie.uid, knife: "", gift: false,
     passXp: 0, premium: false, premiumSig: "", claimed: [], missions: freshMissions(), listed: [], shop: { day: today(), bought: [] },
     salt: 0, xp: 0, res: emptyRes(), ammo: emptyAmmo(),
     bag: grid(BAG_SIZE), hot: grid(HOT_SIZE), armor: grid(4), stash: grid(STASH_SIZE), secure: grid(SECURE_SIZE), pocket: 2,
@@ -340,7 +362,7 @@ function load(): Profile {
   }
 }
 
-type Shooter = Pick<Profile, "markers" | "loadout" | "cases" | "equipped" | "agents" | "agent" | "knife" | "passXp" | "premium" | "premiumSig" | "claimed" | "missions" | "listed" | "shop">;
+type Shooter = Pick<Profile, "markers" | "loadout" | "crates" | "cases" | "equipped" | "agents" | "agent" | "knife" | "passXp" | "premium" | "premiumSig" | "claimed" | "missions" | "listed" | "shop" | "gift">;
 
 function loadMarkers(p: Partial<Profile>, fresh: Profile): Shooter {
   // Factory-finish starters from the paintball days are not items any more: every weapon has that look for free.
@@ -349,15 +371,15 @@ function loadMarkers(p: Partial<Profile>, fresh: Profile): Shooter {
   for (const [id, uid] of Object.entries(p.equipped ?? {})) if (markers.some((m) => m.uid === uid && m.id === id)) equipped[id] = uid;
   let agents = (p.agents ?? []).filter((a) => AGENT_BY_ID[a.id]);
   if (!agents.some((a) => a.id === "rookie")) agents = [...fresh.agents, ...agents.filter((a) => !a.starter)];
-  // Byte arrived later: profiles from before get it, and start out wearing it.
-  const hadByte = agents.some((a) => a.id === "byte");
-  if (!hadByte) agents = [fresh.agents[0], ...agents];
-  const agent = hadByte && agents.some((a) => a.uid === p.agent) ? p.agent! : agents[0].uid;
-  const missions = p.missions && p.missions.day === today() && p.missions.list?.every((m) => MISSION_BY_ID[m.id]) ? p.missions : fresh.missions;
+  const agent = agents.some((a) => a.uid === p.agent) ? p.agent! : agents[0].uid;
+  const season = freshMissions(p.missions?.season).season;
+  const missions = p.missions && p.missions.day === today() && p.missions.list?.every((m) => MISSION_BY_ID[m.id]) ? { ...p.missions, season } : { ...fresh.missions, season };
+  // Cases used to be one kind: whatever was left of them becomes Starter cases.
+  const crates = p.crates ? withCrates(p.crates) : p.cases === undefined ? withCrates(fresh.crates) : withCrates({ starter: p.cases });
   return {
-    markers, loadout: [null, null, null], cases: p.cases ?? fresh.cases, equipped, agents, agent, knife: markers.some((m) => m.uid === p.knife) ? p.knife! : "",
+    markers, loadout: [null, null, null], ...crates, equipped, agents, agent, knife: markers.some((m) => m.uid === p.knife) ? p.knife! : "",
     passXp: p.passXp ?? 0, premium: !!p.premium, premiumSig: p.premiumSig ?? "", claimed: p.claimed ?? [], missions, listed: p.listed ?? [],
-    shop: p.shop?.day === today() ? p.shop : fresh.shop,
+    shop: p.shop?.day === today() ? p.shop : fresh.shop, gift: !!p.gift,
   };
 }
 
@@ -375,8 +397,8 @@ function profileOf(s: Profile): Profile {
   return {
     salt: s.salt, xp: s.xp, res: s.res, ammo: s.ammo, bag: s.bag, hot: s.hot, armor: s.armor, stash: s.stash, secure: s.secure,
     pocket: s.pocket, bench: s.bench, banked: s.banked, skills: s.skills, rep: s.rep, contracts: s.contracts, known: s.known, stats: s.stats,
-    markers: s.markers, loadout: s.loadout, cases: s.cases, equipped: s.equipped, agents: s.agents, agent: s.agent, knife: s.knife,
-    passXp: s.passXp, premium: s.premium, premiumSig: s.premiumSig, claimed: s.claimed, missions: s.missions, listed: s.listed, shop: s.shop,
+    markers: s.markers, loadout: s.loadout, crates: s.crates, cases: s.cases, equipped: s.equipped, agents: s.agents, agent: s.agent, knife: s.knife,
+    passXp: s.passXp, premium: s.premium, premiumSig: s.premiumSig, claimed: s.claimed, missions: s.missions, listed: s.listed, shop: s.shop, gift: s.gift,
   };
 }
 
@@ -509,29 +531,34 @@ export const useStore = create<State>((set, get) => ({
   arenaMap: "oasis",
   wallet: null,
 
-  openCase: () => {
+  openCase: (id) => {
     const s = get();
-    if (s.cases <= 0) return null;
-    if (Math.random() * 100 < AGENT_CHANCE) {
-      const item = rollAgent();
-      set({ cases: s.cases - 1, agents: [...s.agents, item] });
+    const def = CASE_BY_ID[id];
+    if (!def || !(s.crates[id] > 0)) return null;
+    const left = withCrates({ ...s.crates, [id]: s.crates[id] - 1 });
+    const got = rollFrom(def);
+    if (got.kind === "a") {
+      const item = newAgent(got.id);
+      set({ ...left, agents: [...s.agents, item] });
       return { kind: "a", item };
     }
-    const item = rollCase();
-    set({ cases: s.cases - 1, markers: [...s.markers, item] });
+    const item = newMarker(got.id, got.skin);
+    set({ ...left, markers: [...s.markers, item] });
     return { kind: "w", item };
   },
 
-  buyCases: (n) => {
+  buyCase: (id, n = 1) => {
     const s = get();
-    const pack = CASE_PACKS.find((p) => p.n === n);
-    if (!pack) return;
-    if (s.salt < pack.price) {
+    const def = CASE_BY_ID[id];
+    if (!def) return false;
+    if (s.salt < def.price * n) {
       sfx.deny();
-      return s.toast("Не хватает монет", "#f0a35c");
+      s.toast("Не хватает монет", "#f0a35c");
+      return false;
     }
-    set({ salt: s.salt - pack.price, cases: s.cases + pack.n });
+    set({ salt: s.salt - def.price * n, ...withCrates({ ...s.crates, [id]: (s.crates[id] ?? 0) + n }) });
     sfx.coins();
+    return true;
   },
 
   buyOffer: (key) => {
@@ -576,10 +603,18 @@ export const useStore = create<State>((set, get) => ({
     if (gained > 0) s.toast(`Боевой пропуск: уровень ${passLevel(s.passXp + add)}`, "#ffb81a");
   },
 
+  spinGift: () => {
+    if (get().gift) return -1;
+    const i = spinWheel();
+    get().grant(WHEEL[i].reward);
+    set({ gift: true });
+    return i;
+  },
+
   grant: (r, serial) => {
     const s = get();
     if (r.kind === "coins") set({ salt: s.salt + r.n });
-    else if (r.kind === "case") set({ cases: s.cases + r.n });
+    else if (r.kind === "case") set(withCrates({ ...s.crates, [r.id]: (s.crates[r.id] ?? 0) + r.n }));
     else if (r.kind === "skin") {
       const item = newMarker(r.id, r.skin);
       if (serial) item.serial = serial;
@@ -630,17 +665,18 @@ export const useStore = create<State>((set, get) => ({
 
   passEvent: (e, n) => {
     const s = get();
-    const base = s.missions.day === today() ? s.missions : freshMissions();
-    const list = base.list.map((m) => (MISSION_BY_ID[m.id].event === e ? { ...m, n: Math.min(MISSION_BY_ID[m.id].need, m.n + n) } : m));
-    set({ missions: { day: base.day, list } });
+    const base = s.missions.day === today() ? s.missions : freshMissions(s.missions.season);
+    const bump = (m: Missions["list"][number]) => (MISSION_BY_ID[m.id].event === e ? { ...m, n: Math.min(MISSION_BY_ID[m.id].need, m.n + n) } : m);
+    set({ missions: { day: base.day, list: base.list.map(bump), season: base.season.map(bump) } });
   },
 
   claimMission: (id) => {
     const s = get();
-    const m = s.missions.list.find((x) => x.id === id);
+    const m = [...s.missions.list, ...s.missions.season].find((x) => x.id === id);
     const def = MISSION_BY_ID[id];
     if (!m || !def || m.claimed || m.n < def.need) return;
-    set({ missions: { day: s.missions.day, list: s.missions.list.map((x) => (x.id === id ? { ...x, claimed: true } : x)) } });
+    const take = (x: Missions["list"][number]) => (x.id === id ? { ...x, claimed: true } : x);
+    set({ missions: { day: s.missions.day, list: s.missions.list.map(take), season: s.missions.season.map(take) } });
     get().addPassXp(def.xp);
     sfx.pickup();
   },
@@ -718,8 +754,10 @@ export const useStore = create<State>((set, get) => ({
   addXp: (n) => {
     const s = get();
     const gained = levelOf(s.xp + n) - levelOf(s.xp);
-    // Every new level is a case.
-    set({ xp: s.xp + n, cases: s.cases + Math.max(0, gained) });
+    // Every new level is a case: an everyday one, and every fifth level a good one.
+    const crates = { ...s.crates };
+    for (let l = levelOf(s.xp) + 1; l <= levelOf(s.xp + n); l++) crates[levelCase(l)] = (crates[levelCase(l)] ?? 0) + 1;
+    set({ xp: s.xp + n, ...withCrates(crates) });
     if (gained > 0) {
       s.toast(`Уровень ${levelOf(s.xp + n)}! Кейс ждёт в меню`, "#ffd24a");
       sfx.rare();

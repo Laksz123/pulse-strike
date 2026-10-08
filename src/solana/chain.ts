@@ -26,8 +26,51 @@ export const MARKET_FEE = 0.05;
 export const LIST_FEE_SOL = 0.001;
 const BURNER_KEY = "pulse.burner.v1";
 
+/**
+ * The game's own program on devnet (`programs/pulse_strike`): the premium pass and the market live
+ * in it as accounts. Empty until it is deployed — then everything below falls back to plain
+ * transfers with Memo notes, the protocol described at the top of this file.
+ */
+export const PROGRAM_ID = "";
+const PROGRAM = PROGRAM_ID ? new PublicKey(PROGRAM_ID) : null;
+export const onProgram = () => PROGRAM !== null;
+const SEASON_NO = 1;
+
 export const connection = new Connection(clusterApiUrl(CLUSTER), "confirmed");
-export const explorer = (sig: string) => `https://explorer.solana.com/tx/${sig}?cluster=${CLUSTER}`;
+/** A link to a transaction, or to an account when given an address instead of a signature. */
+export const explorer = (sig: string) => `https://explorer.solana.com/${sig.length < 60 ? "address" : "tx"}/${sig}?cluster=${CLUSTER}`;
+
+// How Anchor names things on the wire: the first eight bytes of a hash of the name.
+const IX = {
+  buyPass: [57, 144, 218, 182, 67, 42, 234, 124],
+  list: [54, 174, 193, 67, 17, 41, 132, 38],
+  buy: [102, 6, 61, 18, 1, 218, 235, 234],
+  cancel: [232, 219, 223, 41, 219, 236, 220, 190],
+};
+/** The mark every listing account starts with, in the form the RPC filter wants. */
+const LISTING_MARK = "dV6QTCMAagy";
+const u16 = (n: number) => {
+  const b = Buffer.alloc(2);
+  b.writeUInt16LE(n, 0);
+  return b;
+};
+const u32 = (n: number) => {
+  const b = Buffer.alloc(4);
+  b.writeUInt32LE(n, 0);
+  return b;
+};
+const u64 = (n: bigint | number) => {
+  const b = Buffer.alloc(8);
+  new DataView(b.buffer, b.byteOffset, 8).setBigUint64(0, BigInt(n), true);
+  return b;
+};
+const text = (t: string) => Buffer.concat([u32(Buffer.byteLength(t, "utf8")), Buffer.from(t, "utf8")]);
+const signer = (pubkey: PublicKey) => ({ pubkey, isSigner: true, isWritable: true });
+const writable = (pubkey: PublicKey) => ({ pubkey, isSigner: false, isWritable: true });
+const SYSTEM = { pubkey: SystemProgram.programId, isSigner: false, isWritable: false };
+const call = (name: keyof typeof IX, keys: { pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[], ...args: Buffer[]) =>
+  new TransactionInstruction({ programId: PROGRAM!, keys, data: Buffer.concat([Buffer.from(IX[name]), ...args]) });
+const passAddress = (owner: PublicKey) => PublicKey.findProgramAddressSync([Buffer.from("pass"), owner.toBuffer(), u16(SEASON_NO)], PROGRAM!)[0];
 export const short = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
 export const sol = (lamports: number) => lamports / LAMPORTS_PER_SOL;
 
@@ -139,11 +182,17 @@ const memoText = (m: string | null | undefined) => (m ?? "").replace(/^\[\d+\]\s
 
 export function passTx(buyer: string, priceSol: number): Transaction {
   const from = new PublicKey(buyer);
+  // Through the program the price is the program's own; the pass becomes an account anyone can check.
+  if (PROGRAM) return new Transaction().add(call("buyPass", [signer(from), writable(passAddress(from)), writable(TREASURY), SYSTEM], u16(SEASON_NO)));
   return new Transaction().add(pay(from, TREASURY, priceSol * LAMPORTS_PER_SOL), memo(PASS_MEMO, from));
 }
 
 /** Looks on chain for this wallet's payment for the season pass; returns its signature. */
 export async function findPass(address: string, priceSol: number): Promise<string | null> {
+  if (PROGRAM) {
+    const pass = passAddress(new PublicKey(address));
+    if (await connection.getAccountInfo(pass)) return (await connection.getSignaturesForAddress(pass, { limit: 1 }))[0]?.signature ?? pass.toBase58();
+  }
   const sigs = await connection.getSignaturesForAddress(new PublicKey(address), { limit: 200 });
   for (const s of sigs) {
     if (s.err || !memoText(s.memo).includes(PASS_MEMO)) continue;
@@ -180,25 +229,73 @@ export interface Book {
   cancelled: string[];
 }
 
+/** The address of the listing a transaction from `listTx` will create, when it goes through the program. */
+let lastListing: string | null = null;
+export const listedAs = () => lastListing;
+
 export function listTx(seller: string, item: { kind: "w" | "a"; id: string; skin: number; serial: number }, priceSol: number): Transaction {
   const from = new PublicKey(seller);
+  lastListing = null;
+  if (PROGRAM) {
+    // Any number the seller has not used before: the listing's address is made from it.
+    const nonce = BigInt(Date.now()) * 1000n + BigInt(Math.floor(Math.random() * 1000));
+    const listing = PublicKey.findProgramAddressSync([Buffer.from("listing"), from.toBuffer(), u64(nonce)], PROGRAM)[0];
+    lastListing = listing.toBase58();
+    return new Transaction().add(
+      call("list", [signer(from), writable(listing), SYSTEM], u64(nonce), Buffer.from([item.kind === "a" ? 1 : 0]), text(item.id), u16(item.skin), u32(item.serial), u64(Math.round(priceSol * LAMPORTS_PER_SOL))),
+    );
+  }
   const note = `pulse:list:${item.kind}:${item.id}:${item.skin}:${item.serial}:${Math.round(priceSol * LAMPORTS_PER_SOL)}:${seller}`;
   return new Transaction().add(pay(from, TREASURY, LIST_FEE_SOL * LAMPORTS_PER_SOL), memo(note, from));
 }
 
 export function buyTx(buyer: string, l: Listing): Transaction {
   const from = new PublicKey(buyer);
+  if (PROGRAM) return new Transaction().add(call("buy", [signer(from), writable(new PublicKey(l.seller)), writable(new PublicKey(l.sig)), writable(TREASURY), SYSTEM]));
   const fee = Math.round(l.lamports * MARKET_FEE);
   return new Transaction().add(pay(from, new PublicKey(l.seller), l.lamports - fee), pay(from, TREASURY, fee), memo(`pulse:buy:${l.sig}`, from));
 }
 
 export function cancelTx(seller: string, l: { sig: string }): Transaction {
   const from = new PublicKey(seller);
+  if (PROGRAM) return new Transaction().add(call("cancel", [signer(from), writable(new PublicKey(l.sig))]));
   return new Transaction().add(pay(from, TREASURY, 5000), memo(`pulse:cancel:${l.sig}`, from));
 }
 
-/** Rebuilds the order book from the treasury's transaction history. */
-export async function fetchBook(): Promise<Book> {
+/** The order book as the program holds it: every listing is an account. `mine` are listings to ask after if they are gone. */
+async function programBook(mine: string[]): Promise<Book> {
+  const accounts = await connection.getProgramAccounts(PROGRAM!, { filters: [{ memcmp: { offset: 0, bytes: LISTING_MARK } }] });
+  const open: Listing[] = [];
+  for (const { pubkey, account } of accounts) {
+    const d = Buffer.from(account.data);
+    const view = new DataView(d.buffer, d.byteOffset, d.byteLength);
+    const len = d.readUInt32LE(49);
+    const o = 53 + len;
+    open.push({
+      sig: pubkey.toBase58(), seller: new PublicKey(d.subarray(8, 40)).toBase58(), kind: d[48] === 1 ? "a" : "w", id: d.toString("utf8", 53, o),
+      skin: d.readUInt16LE(o), serial: d.readUInt32LE(o + 2), lamports: Number(view.getBigUint64(o + 6, true)), time: Number(view.getBigInt64(o + 14, true)),
+    });
+  }
+  open.sort((a, b) => b.time - a.time);
+  // A listing of ours that is no longer there was closed: by a buyer who paid for it, or by us.
+  const sold: Record<string, string> = {};
+  const cancelled: string[] = [];
+  for (const id of mine) {
+    if (id.length >= 60 || open.some((l) => l.sig === id)) continue;
+    const last = (await connection.getSignaturesForAddress(new PublicKey(id), { limit: 3 })).find((x) => !x.err);
+    const tx = last && (await connection.getParsedTransaction(last.signature, { maxSupportedTransactionVersion: 0 }));
+    if (!tx) continue;
+    const keys = tx.transaction.message.accountKeys.map((k) => k.pubkey.toBase58());
+    // A sale is the only thing that brings the treasury into a transaction with a listing.
+    if (keys.includes(TREASURY.toBase58())) sold[id] = keys[0];
+    else cancelled.push(id);
+  }
+  return { open, sold, cancelled };
+}
+
+/** Rebuilds the order book: from the program's accounts, or — before it is deployed — from the treasury's transaction history. */
+export async function fetchBook(mine: string[] = []): Promise<Book> {
+  if (PROGRAM) return programBook(mine);
   const sigs = (await connection.getSignaturesForAddress(TREASURY, { limit: 400 })).filter((s) => !s.err).reverse();
   const listings = new Map<string, Listing>();
   const claims: { sig: string; target: string; type: "buy" | "cancel" }[] = [];

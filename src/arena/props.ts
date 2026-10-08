@@ -194,7 +194,7 @@ export function palm(): THREE.Group {
 export function fountain(stone: THREE.Material): THREE.Group {
   const g = new THREE.Group();
   const add = (r: number, h: number, y: number, m: THREE.Material, r2 = r) => {
-    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r2, r, h, 24), m);
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r2, r, h, 14), m);
     mesh.position.y = y;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -382,7 +382,7 @@ export function bench(): THREE.Group {
 export function well(stone: THREE.Material, roof: THREE.Material): THREE.Group {
   const g = new THREE.Group();
   const add = (r: number, h: number, y: number, m: THREE.Material, r2 = r) => {
-    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r2, r, h, 22), m);
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r2, r, h, 14), m);
     mesh.position.y = y;
     mesh.castShadow = true;
     mesh.receiveShadow = true;

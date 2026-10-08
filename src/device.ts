@@ -5,8 +5,8 @@
 
 const query = new URLSearchParams(location.search);
 
-/** Played with fingers: no keyboard, no mouse to capture. `?touch` forces it, for trying it on a desk. */
-export const TOUCH = query.has("touch") || (matchMedia("(pointer: coarse)").matches && navigator.maxTouchPoints > 0);
+/** Played with fingers: no keyboard, no mouse to capture. `?touch` forces it, for trying it on a desk; `?mouse` forces the opposite. */
+export const TOUCH = !query.has("mouse") && (query.has("touch") || (matchMedia("(pointer: coarse)").matches && navigator.maxTouchPoints > 0));
 
 /** A phone's graphics chip: no shadows, fewer lamps, fewer pixels. */
 export const LIGHT = TOUCH || query.has("light");
@@ -33,6 +33,50 @@ export function fitUi(): void {
   set();
   addEventListener("resize", set);
   addEventListener("orientationchange", () => setTimeout(set, 250));
+}
+
+/**
+ * A phone browser wants to select, zoom, scroll and open menus under a held finger; a game wants
+ * none of it. Everything of that kind is refused here, once, for the whole page.
+ */
+export function tame(): void {
+  if (!TOUCH) return;
+  const stop = (e: Event) => {
+    if (e.cancelable) e.preventDefault();
+  };
+  const el = (t: EventTarget | null) => (t instanceof Element ? t : null);
+  const field = (t: EventTarget | null) => !!el(t)?.closest("input, textarea, select");
+  /** In the match itself, rather than on one of its sheets (pause, buying, sides, the result), which are ordinary pages. */
+  const playing = (t: EventTarget | null) => {
+    const e = el(t);
+    return !!e?.closest(".game") && !e.closest(".overlay, .a-teams");
+  };
+  // Pinching, long-press menus, double taps and dragging pictures about.
+  for (const type of ["gesturestart", "gesturechange", "gestureend", "contextmenu", "dblclick", "dragstart"]) document.addEventListener(type, stop, { passive: false });
+  document.addEventListener("selectstart", (e) => {
+    if (!field(e.target)) stop(e);
+  });
+  // Two fingers are two controls, never a pinch; and a finger on the match is never a scroll or a selection.
+  const claim = (e: TouchEvent) => {
+    if (e.touches.length > 1 || playing(e.target)) stop(e);
+  };
+  document.addEventListener(
+    "touchstart",
+    (e) => {
+      if (!field(e.target)) getSelection()?.removeAllRanges();
+      claim(e);
+    },
+    { passive: false },
+  );
+  document.addEventListener("touchmove", claim, { passive: false });
+  // If the page is zoomed in anyway, put it back: stating the scale again makes the browser return to it.
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
+  visualViewport?.addEventListener("resize", () => {
+    if (!meta || (visualViewport?.scale ?? 1) < 1.02) return;
+    const content = meta.content;
+    meta.content = `${content}, minimum-scale=1`;
+    requestAnimationFrame(() => (meta.content = content));
+  });
 }
 
 /** Fills the screen and turns it sideways where the browser allows; where it does not, nothing happens. */

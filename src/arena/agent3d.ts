@@ -11,7 +11,7 @@
 
 import * as THREE from "three";
 import { AGENTS, AGENT_BY_ID, type AgentDef } from "./agents";
-import { bakeColored, capsule, outline, pbr, rb, sph, tx, ty, tz } from "./models";
+import { bakeColored, capsule, isFine, outline, pbr, rb, sph, tx, ty, tz } from "./models";
 
 type G = THREE.Object3D;
 type M = THREE.Material;
@@ -31,7 +31,7 @@ function mesh(p: G, g: THREE.BufferGeometry, m: M, x: number, y: number, z: numb
 
 /** The top half of a ball: helmets, caps, hoods. */
 function dome(p: G, r: number, x: number, y: number, z: number, m: M, sy = 1): THREE.Mesh {
-  const o = mesh(p, new THREE.SphereGeometry(r, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), m, x, y, z);
+  const o = mesh(p, new THREE.SphereGeometry(r, isFine() ? 24 : 14, isFine() ? 12 : 7, 0, Math.PI * 2, 0, Math.PI / 2), m, x, y, z);
   o.scale.y = sy;
   return o;
 }

@@ -1,6 +1,6 @@
 /** First-person character: movement on the physics world, the camera, health. */
 
-import RAPIER from "@dimforge/rapier3d-compat";
+import { RAPIER } from "../physics";
 import * as THREE from "three";
 import { maxHpOf, skillOf, useStore } from "../store";
 import { sfx } from "./audio";

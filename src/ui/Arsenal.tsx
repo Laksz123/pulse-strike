@@ -60,7 +60,7 @@ export function Arsenal({ start = "skins", go }: { start?: Tab; go?: Go }) {
   const [sort, setSort] = useState<"rare" | "new">("rare");
   const [selling, setSelling] = useState<{ kind: "w" | "a"; uid: string } | null>(null);
   const [pick, setPick] = useState<Pick>(() => {
-    if (start === "agents" || !s.markers.length) return { kind: "agent", id: s.agents.find((a) => a.uid === s.agent)?.id ?? "byte", item: s.agents.find((a) => a.uid === s.agent) ?? null };
+    if (start === "agents" || !s.markers.length) return { kind: "agent", id: s.agents.find((a) => a.uid === s.agent)?.id ?? "rookie", item: s.agents.find((a) => a.uid === s.agent) ?? null };
     return { kind: "skin", item: [...s.markers].sort((a, b) => itemRarity(b) - itemRarity(a))[0] };
   });
   const canvas = useRef<HTMLDivElement>(null);

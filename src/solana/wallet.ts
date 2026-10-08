@@ -5,7 +5,7 @@ import { SEASON } from "../arena/pass";
 import { COIN_PACKS } from "../arena/shop";
 import { useStore } from "../store";
 import {
-  LIST_FEE_SOL, airdrop, balance, buyTx, cancelTx, coinsTx, connectBurner, connectPhantom, fetchBook, findPass, listTx, passTx, sol, type Book, type Listing, type Wallet,
+  LIST_FEE_SOL, airdrop, balance, buyTx, cancelTx, coinsTx, connectBurner, connectPhantom, fetchBook, findPass, listTx, listedAs, onProgram, passTx, sol, type Book, type Listing, type Wallet,
 } from "./chain";
 
 interface WalletState {
@@ -117,7 +117,7 @@ export async function buyCoins(id: string): Promise<boolean> {
 
 /** Reads the order book and settles what happened to the player's own listings. */
 export async function loadBook(): Promise<void> {
-  const book = await run("Читаем маркет из сети…", fetchBook);
+  const book = await run("Читаем маркет из сети…", () => fetchBook(useStore.getState().listed.map((l) => l.sig)));
   if (!book) return;
   useWallet.setState({ book });
   const s = useStore.getState();
@@ -145,8 +145,10 @@ export async function sell(kind: "w" | "a", uid: string, priceSol: number): Prom
     useWallet.setState({ error: "Укажи цену от 0.001 SOL" });
     return false;
   }
-  const sig = await run("Выставляем на маркет…", () => w.send(listTx(w.address, item, priceSol)));
-  if (!sig) return false;
+  const sent = await run("Выставляем на маркет…", () => w.send(listTx(w.address, item, priceSol)));
+  if (!sent) return false;
+  // Through the program a listing is known by its account; before that, by the transaction that made it.
+  const sig = listedAs() ?? sent;
   // The item leaves the inventory for as long as it is on sale.
   const now = useStore.getState();
   const equipped = { ...now.equipped };
@@ -156,8 +158,8 @@ export async function sell(kind: "w" | "a", uid: string, priceSol: number): Prom
     markers: now.markers.filter((m) => m.uid !== uid), agents, equipped, agent: now.agent === uid ? agents[0].uid : now.agent, knife: now.knife === uid ? "" : now.knife,
     listed: [...now.listed, { sig, ...item, price: priceSol }],
   });
-  useWallet.setState({ lastSig: sig });
-  now.toast(`Выставлено за ${priceSol} SOL · сбор ${LIST_FEE_SOL} SOL`, "#4fc24a");
+  useWallet.setState({ lastSig: sent });
+  now.toast(onProgram() ? `Выставлено за ${priceSol} SOL · залог за лот вернётся` : `Выставлено за ${priceSol} SOL · сбор ${LIST_FEE_SOL} SOL`, "#4fc24a");
   void refreshBalance();
   void loadBook();
   return true;

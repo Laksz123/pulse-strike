@@ -3,7 +3,9 @@ import { AGENT_BY_ID } from "../arena/agents";
 import { RARITY } from "../arena/markers";
 import { SEASON, rewardName, rewardRarity, today, type Reward } from "../arena/pass";
 import { agentIcon, markerIcon } from "../arena/render";
-import { CASE_PACKS, COIN_PACKS, dailyOffers, untilRefresh, type Offer } from "../arena/shop";
+import { CASES, TIER_NAMES, caseArt } from "../arena/cases";
+import { COIN_PACKS, dailyOffers, untilRefresh, type Offer } from "../arena/shop";
+import { showCase } from "./Cases";
 import { buyCoins, useWallet } from "../solana/wallet";
 import { useStore } from "../store";
 import { useEscape } from "./Trade";
@@ -144,20 +146,14 @@ export function Shop({ go }: { go?: (page: "pass" | "market" | "cases") => void 
       </section>
 
       <section>
-        <div className="s-head"><h2 className="toon">Кейсы</h2><span className="s-timer">внутри скин или агент · <button className="s-link" onClick={() => go?.("cases")}>шансы и открытие</button></span></div>
+        <div className="s-head"><h2 className="toon">Кейсы</h2><span className="s-timer">десять видов · <button className="s-link" onClick={() => go?.("cases")}>все кейсы и что внутри</button></span></div>
         <div className="s-row">
-          {CASE_PACKS.map((p) => (
-            <button
-              key={p.n} className="s-card case" style={{ ["--r" as string]: "#2f9bff" }}
-              onClick={() => setAsk({ key: `c${p.n}`, name: p.n === 1 ? "Кейс" : `Набор из ${p.n} кейсов`, sub: "Кейсы", art: "/art/case.png", color: "#2f9bff", price: p.price, count: p.n, buy: () => s.buyCases(p.n) })}
-            >
-              {p.tag && <i className="s-ribbon">{p.tag}</i>}
-              <small>{p.n === 1 ? "Один кейс" : `Набор из ${p.n}`}</small>
-              <div className="s-stack">
-                {Array.from({ length: Math.min(3, p.n) }, (_, i) => <img key={i} src="/art/case.png" alt="" draggable={false} style={{ transform: `translate(${(i - (Math.min(3, p.n) - 1) / 2) * 34}px, ${Math.abs(i - 1) * 8}px) rotate(${(i - 1) * 8}deg)` }} />)}
-              </div>
-              <b>Кейс ×{p.n}</b>
-              <Price n={p.price} />
+          {CASES.filter((c) => ["starter", "neon", "agent", "blade", "gold", "champion"].includes(c.id)).map((c) => (
+            <button key={c.id} className="s-card case" style={{ ["--r" as string]: c.color }} onClick={() => { showCase(c.id); go?.("cases"); }}>
+              <small>{TIER_NAMES[c.tier]}</small>
+              <div className="s-stack"><img src={caseArt(c.id)} alt="" draggable={false} /></div>
+              <b>{c.name}</b>
+              <Price n={c.price} />
             </button>
           ))}
         </div>

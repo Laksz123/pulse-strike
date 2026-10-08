@@ -4,7 +4,7 @@
  * walls and keeps the same size at any field of view.
  */
 
-import RAPIER from "@dimforge/rapier3d-compat";
+import { RAPIER } from "../physics";
 import * as THREE from "three";
 import { skillOf, useStore } from "../store";
 import { sfx } from "./audio";

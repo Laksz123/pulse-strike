@@ -1,6 +1,6 @@
 /** One mission: owns the renderer, the physics world, the island and the frame loop. */
 
-import RAPIER from "@dimforge/rapier3d-compat";
+import { RAPIER, loadPhysics } from "../physics";
 import * as THREE from "three";
 import { skillOf, useStore, type Summary, type Tab } from "../store";
 import { sfx } from "./audio";
@@ -108,7 +108,7 @@ export class Game {
   private cleanup: (() => void)[] = [];
 
   static async create(host: HTMLElement): Promise<Game> {
-    await RAPIER.init();
+    await loadPhysics();
     return new Game(host);
   }
 

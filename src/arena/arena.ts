@@ -9,17 +9,17 @@
  *   ffa  — ten players, everyone for themselves, first to twenty kills.
  */
 
-import RAPIER from "@dimforge/rapier3d-compat";
+import { RAPIER, loadPhysics } from "../physics";
 import * as THREE from "three";
 import { sfx } from "../game/audio";
 import { useStore, type ArenaModeId } from "../store";
 import { AGENTS, ARM_COLORS, DEFAULT_AGENT } from "./agents";
-import { HIT_AT, HOLD, MOVE_TIME, drawTime, knifePose, type KnifeMove } from "./knife";
+import { BALANCE, HIT_AT, HOLD, MOVE_TIME, RING, drawTime, knifePose, type Hold, type KnifeMove } from "./knife";
 import { Grenades, NADES, NADE_ORDER, Puffs, type NadeKind } from "./grenades";
 import { buildMap, type ArenaMap, type MapId, type P2, type Site } from "./map";
 import { DEFAULT_KNIFE, DEFAULT_SIDE, GUNS, MARKER_BY_ID, PATTERNS, RARITY, itemRarity, type MarkerDef } from "./markers";
 import { LIGHT, TOUCH } from "../device";
-import { LEFT_FOREARM, bake, buildArms, buildMarker, pbr, type Arms, type MarkerModel } from "./models";
+import { GRIP_AT, LEFT_FOREARM, RING_AT, RING_DIR, bake, buildArms, buildMarker, coarse, pbr, type Arms, type MarkerModel } from "./models";
 import { DRAW_TIME, INSPECT_TIME, RELOAD_CUES, drawPose, inspectPose, kindOf, reloadPose, type GunPose } from "./viewmodel";
 import { Paint, type Actor } from "./paint";
 import { bombModel } from "./props";
@@ -80,6 +80,12 @@ const V2 = new THREE.Vector3();
 const M1 = new THREE.Matrix4();
 const Q1 = new THREE.Quaternion();
 const Q2 = new THREE.Quaternion();
+const AXIS_X = new THREE.Vector3(1, 0, 0);
+const AXIS_Z = new THREE.Vector3(0, 0, 1);
+const Q3 = new THREE.Quaternion();
+const V3 = new THREE.Vector3();
+/** The forearm that holds a blade: it comes in from the lower right and points into the picture. */
+const KNIFE_ARM = new THREE.Vector3(-0.25, 0.3, -0.92).normalize();
 /** Where the weapon sits when nothing is happening to it. */
 const VM_REST = new THREE.Matrix4().compose(new THREE.Vector3(0.23, -0.25, -0.6), new THREE.Quaternion().setFromEuler(new THREE.Euler(0.03, 0.09, 0)), new THREE.Vector3(1, 1, 1));
 
@@ -225,7 +231,7 @@ class Bot implements Body {
 
   constructor(private arena: Arena, readonly id: number, readonly name: string, readonly team: number, readonly color: number, readonly agent: string) {
     this.collider = arena.world.createCollider(RAPIER.ColliderDesc.capsule(0.52, 0.36).setTranslation(0, CENTER + 0.1, 0));
-    this.model = new AgentRig(agent, color);
+    this.model = coarse(() => new AgentRig(agent, color));
     arena.scene.add(this.model.group);
     if (arena.mode.teams && team === 0 && !arena.range) {
       this.tag = allyTag();
@@ -237,6 +243,11 @@ class Bot implements Body {
   chest(out: THREE.Vector3): THREE.Vector3 {
     const t = this.collider.translation();
     return out.set(t.x, t.y + 0.25, t.z);
+  }
+
+  /** Shots are tested against the model itself, piece by piece. */
+  hitTest(origin: THREE.Vector3, dir: THREE.Vector3, dist: number, pad: number, out: { t: number; head: boolean }): boolean {
+    return this.model.rayHit(origin, dir, dist, pad, out);
   }
 
   hurt(by: Actor, dmg: number, weapon: string, head: boolean): void {
@@ -263,7 +274,7 @@ class Bot implements Body {
     // Some bots show off a skin.
     const skins = PATTERNS.map((p, i) => ({ p, i })).filter((x) => !x.p.pass);
     this.skin = Math.random() < 0.35 ? skins[Math.floor(Math.random() * skins.length)].i : 0;
-    const built = buildMarker(def.id, this.skin, 0.005);
+    const built = coarse(() => buildMarker(def.id, this.skin, 0.005));
     bake(built.group, built.muzzle2 ? [built.muzzle, built.muzzle2] : [built.muzzle]);
     this.model.setWeapon(built);
   }
@@ -626,6 +637,11 @@ export class Arena {
   private knife = { id: DEFAULT_KNIFE, skin: 0 };
   /** The blade's motion in progress. */
   private kMove: { kind: KnifeMove; t: number; dur: number; side: number; hit: boolean; heavy: boolean } | null = null;
+  /** The hand that holds the blade, turned into view; the blade, turned into that hand; and where on its handle the hand closes. */
+  private kHand = new THREE.Quaternion();
+  private kBlade = new THREE.Quaternion();
+  private kAt = 0;
+  private kArm = new THREE.Vector3();
   private kSide = 1;
   private kCut = 0;
   private arms: Arms | null = null;
@@ -715,6 +731,15 @@ export class Arena {
   private stick = { x: 0, y: 0 };
   private fireHeld = false;
   private halted = false;
+  /** Where the mouse is on the screen, 0..1, for when it cannot be captured. */
+  private mouse = { x: 0.5, y: 0.5 };
+  /** Times in a row the browser refused to capture the mouse, and when the first of them was. */
+  private lockFails = 0;
+  private lockFailedAt = 0;
+  private looseNote: HTMLElement | null = null;
+  /** The mouse has been captured at least once on this page: this browser can do it, so it is never played loose. */
+  private static everLocked = false;
+  private cursorHidden = false;
   private autoT = 0;
   private autoOn = false;
   private cleanup: (() => void)[] = [];
@@ -722,7 +747,7 @@ export class Arena {
   private v2 = new THREE.Vector3();
 
   static async create(host: HTMLElement, modeId: ArenaModeId, mapId: MapId): Promise<Arena> {
-    await RAPIER.init();
+    await loadPhysics();
     return new Arena(host, ARENA_MODES.find((m) => m.id === modeId) ?? ARENA_MODES[0], mapId);
   }
 
@@ -737,6 +762,8 @@ export class Arena {
     this.renderer.autoClear = false;
     this.renderer.shadowMap.enabled = !LIGHT;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Shadows are redrawn every other frame: the sun does not move, and nobody sees a shadow lag by a sixtieth of a second.
+    this.renderer.shadowMap.autoUpdate = false;
     // Neutral tone mapping keeps the painted colours saturated.
     this.renderer.toneMapping = THREE.NeutralToneMapping;
     this.renderer.toneMappingExposure = 1.0;
@@ -1298,7 +1325,7 @@ export class Arena {
 
   /** A weapon falls where its owner did. */
   private dropGun(g: Gun, at: THREE.Vector3, toss?: THREE.Vector3): void {
-    const built = buildMarker(g.id, g.skin, 0.006);
+    const built = coarse(() => buildMarker(g.id, g.skin, 0.006));
     bake(built.group, built.muzzle2 ? [built.muzzle, built.muzzle2] : [built.muzzle]);
     // On its side, the way a dropped weapon lies.
     built.group.rotation.z = Math.PI / 2;
@@ -1394,7 +1421,7 @@ export class Arena {
   private layPlayer(): void {
     if (this.range) return;
     const t = this.me.collider.translation();
-    const rig = new AgentRig(this.agentId, this.me.color);
+    const rig = coarse(() => new AgentRig(this.agentId, this.me.color));
     const y = Math.max(this.map.floorAt(t.x, t.z), 0);
     rig.group.position.set(t.x, y, t.z);
     rig.group.rotation.y = this.yaw + Math.PI;
@@ -1754,6 +1781,20 @@ export class Arena {
   }
 
   /** Ends the match and hands out the rewards. */
+  /**
+   * Walking out of a match from the pause menu, the way it is done in Counter-Strike: straight to
+   * the main menu. What was earned so far is kept; there is no result and no bonus for the outcome.
+   */
+  leave(): void {
+    if (this.over) return;
+    this.over = true;
+    sfx.hush();
+    if (document.pointerLockElement) document.exitPointerLock();
+    const s = useStore.getState();
+    s.bank();
+    s.setScreen("menu");
+  }
+
   finish(): void {
     if (this.over) return;
     this.over = true;
@@ -1873,10 +1914,10 @@ export class Arena {
     // Arms in the agent's colours, hands closed on the weapon.
     const melee = !!MARKER_BY_ID[g.id].melee;
     const [sleeve, glove] = ARM_COLORS[this.agentId] ?? ARM_COLORS[AGENTS[0].id];
-    this.arms = buildArms(this.vm, sleeve, glove, this.me.color, melee);
+    const hold = HOLD[g.id] ?? HOLD.k_combat;
+    this.arms = buildArms(this.vm, sleeve, glove, this.me.color, melee, hold.dev);
     this.elbow.copy(this.arms.rest).addScaledVector(LEFT_FOREARM, 0.75).applyMatrix4(VM_REST);
-    const hold = HOLD[g.id];
-    this.vm.group.rotation.set(melee && hold ? hold.tilt : 0, melee && hold ? hold.turn : 0, 0);
+    if (melee) this.setHold(hold);
     this.kMove = melee ? { kind: "draw", t: 0, dur: drawTime(g.id), side: 1, hit: true, heavy: false } : null;
     this.vmMove = melee ? null : { kind: "draw", t: 0, dur: DRAW_TIME[kindOf(g.id)] };
     this.racked = false;
@@ -1887,6 +1928,28 @@ export class Arena {
     this.spin = 0;
     this.burstLeft = 0;
     this.pushHud();
+  }
+
+  /**
+   * Works out how a blade is held, once, when it is drawn. The arm comes first — the forearm, then
+   * the hand turned out and bent at the wrist as far as a wrist goes — and the blade is laid in it.
+   */
+  private setHold(h: Hold): void {
+    const f = h.arm ? this.kArm.fromArray(h.arm).normalize() : this.kArm.copy(KNIFE_ARM);
+    // With the palm down the thumb points left and the back of the hand up; turning the forearm out carries both round it.
+    const left = new THREE.Vector3(-1, 0, 0).addScaledVector(f, f.x).normalize();
+    const upward = new THREE.Vector3().crossVectors(f, left);
+    const thumb0 = left.clone().multiplyScalar(Math.cos(h.sup)).addScaledVector(upward, Math.sin(h.sup));
+    const back = upward.clone().multiplyScalar(Math.cos(h.sup)).addScaledVector(left, -Math.sin(h.sup));
+    // Bending the wrist toward the little finger tips the thumb side forward.
+    const thumb = thumb0.clone().multiplyScalar(Math.cos(h.dev)).addScaledVector(f, Math.sin(h.dev));
+    const along = f.clone().multiplyScalar(Math.cos(h.dev)).addScaledVector(thumb0, -Math.sin(h.dev));
+    this.kHand.setFromRotationMatrix(M1.makeBasis(thumb.negate(), along, back));
+    // The handle lies across the palm: the blade out of the thumb side, or out of the bottom of the fist; its edge leads.
+    const s = h.rev ? -1 : 1;
+    M1.makeBasis(new THREE.Vector3(0, 0, s), new THREE.Vector3(0, -1, 0), new THREE.Vector3(s, 0, 0));
+    this.kBlade.setFromRotationMatrix(M1).multiply(Q2.setFromAxisAngle(AXIS_Z, h.roll));
+    this.kAt = h.at;
   }
 
   private def(): MarkerDef | null {
@@ -2031,12 +2094,38 @@ export class Arena {
     const swap = 0;
     this.throwK *= Math.exp(-6 * dt);
     this.vmRoot.position.set(
-      0.17 + p.x + Math.cos(this.bob) * (0.008 + 0.03 * run) * walk + this.swayX,
+      0.17 + (hold.x ?? 0) + p.x + Math.cos(this.bob) * (0.008 + 0.03 * run) * walk + this.swayX,
       -0.15 + hold.y + p.y - Math.abs(Math.sin(this.bob)) * (0.012 + 0.03 * run) * walk - run * 0.04 + this.swayY - this.landK * 0.06 - swap * 0.3 - this.throwK * 0.28 - (acting ? 0.25 : 0) + Math.sin(this.clock * 1.6) * 0.004,
       -0.42 + hold.z + p.z + run * 0.03,
     );
     this.vmRoot.rotation.set(p.pitch + run * 0.25 - this.swayY * 2, p.yaw + run * 0.3 + this.swayX * 2.5, p.roll + Math.sin(this.bob) * 0.07 * run * walk - this.strafeK * 0.05 + Math.sin(this.clock * 1.1) * 0.015);
-    vm.group.rotation.set(hold.tilt, hold.turn, hold.flat + p.spin);
+    // The arm: the hand's own frame turned into view. Showing the other flat is the forearm rolling, as it does.
+    vm.group.quaternion.copy(this.kHand);
+    if (p.spin) vm.group.quaternion.premultiply(Q1.setFromAxisAngle(this.kArm, p.spin * 0.7));
+    vm.group.position.copy(GRIP_AT).applyQuaternion(vm.group.quaternion).negate();
+    // The blade in the hand: held, turned about its handle, thrown end over end, or spun on a finger by its ring.
+    const blade = this.arms?.blade;
+    if (blade) {
+      const ring = RING[d.id];
+      V1.set(0, 0, ring ? this.kAt : BALANCE[d.id] ?? -0.06);
+      Q1.copy(this.kBlade);
+      if (!ring && p.flip) Q1.multiply(Q2.setFromAxisAngle(AXIS_X, p.flip));
+      if (p.twirl) Q1.multiply(Q2.setFromAxisAngle(AXIS_Z, p.twirl));
+      blade.quaternion.copy(Q1);
+      blade.position.copy(GRIP_AT).add(V2.set(0, 0, V1.z - this.kAt).applyQuaternion(this.kBlade)).sub(V2.copy(V1).applyQuaternion(Q1));
+      // Thrown, it goes straight up, whichever way the hand is turned.
+      if (p.toss) blade.position.add(V2.set(0, p.toss, 0).applyQuaternion(Q2.copy(vm.group.quaternion).invert()));
+      const onFinger = ring ? Math.min(1, p.hook * 1.5) : 0;
+      if (ring && onFinger > 0) {
+        // The ring on the forefinger, its axis along the finger, and the blade going round it like a propeller.
+        Q2.setFromUnitVectors(V2.copy(AXIS_X).applyQuaternion(this.kBlade), RING_DIR).multiply(this.kBlade);
+        Q2.multiply(Q3.setFromAxisAngle(AXIS_X, p.ring));
+        V3.copy(RING_AT).sub(V2.fromArray(ring).applyQuaternion(Q2));
+        blade.quaternion.slerp(Q2, onFinger);
+        blade.position.lerp(V3, onFinger);
+      }
+      this.arms!.grip?.(p.open, p.hook, ring ? 0 : -1);
+    }
     this.vmRoot.visible = this.me.alive;
     const looking = m?.kind === "inspect" ? u : 0;
     vm.anim?.({ t: this.clock, fire: this.kFire, shots: 0, charge: looking, spin: m?.kind === "draw" ? 1 - u : 0, ammo: 1 });
@@ -2285,6 +2374,8 @@ export class Arena {
       if (e.code === "Tab") useArena.setState({ showBoard: false });
     });
     on(document, "mousemove", (e) => {
+      this.mouse.x = e.clientX / Math.max(1, innerWidth);
+      this.mouse.y = e.clientY / Math.max(1, innerHeight);
       if (!this.locked || this.over || this.buyOpen || !this.me.alive) return;
       if (Math.abs(e.movementX) > 400 || Math.abs(e.movementY) > 400) return;
       const sens = 0.0022 * useStore.getState().settings.sens * (this.camera.fov / BASE_FOV);
@@ -2297,6 +2388,10 @@ export class Arena {
     // Sound may only start from a touch; some phones count the finger lifting, not landing.
     on(window, "pointerdown" as keyof DocumentEventMap, () => sfx.unlock());
     on(window, "touchend" as keyof DocumentEventMap, () => sfx.unlock());
+    // A phone put down or switched to something else: the match waits on the pause screen.
+    on(document, "visibilitychange", () => {
+      if (document.hidden && TOUCH) this.pause();
+    });
     on(this.canvas, "mousedown", (e) => {
       sfx.unlock();
       // Fingers have their own buttons; a tap that reaches the picture is not a shot.
@@ -2324,6 +2419,10 @@ export class Arena {
       }
     });
     on(document, "pointerlockchange", () => {
+      if (document.pointerLockElement === this.canvas) {
+        this.lockFails = 0;
+        Arena.everLocked = true;
+      }
       if (!this.locked) {
         this.keys.clear();
         this.trigger = false;
@@ -2341,16 +2440,50 @@ export class Arena {
     }
     if (this.over || this.noLock) return;
     sfx.unlock();
-    void Promise.resolve(this.canvas.requestPointerLock()).catch(() => {});
+    // The mouse is captured, so it cannot leave the game by any edge. The request is made right here, inside
+    // the click that asked for it — browsers refuse one made later — and with raw movement where that exists.
+    const ask = this.canvas.requestPointerLock.bind(this.canvas) as (o?: { unadjustedMovement: boolean }) => Promise<void> | void;
+    const plain = () => {
+      try {
+        void Promise.resolve(ask()).catch(() => {});
+      } catch {
+        // Nothing to do: the pause screen stays up and the next click tries again.
+      }
+    };
+    try {
+      const asked = ask({ unadjustedMovement: true });
+      if (asked && typeof asked.then === "function") asked.catch(() => plain());
+    } catch {
+      plain();
+    }
     setTimeout(() => {
-      if (!this.locked && !this.over && !this.buyOpen && !this.picking) useArena.setState({ paused: true });
-    }, 400);
+      if (this.locked || this.over || this.buyOpen || this.picking) return;
+      useArena.setState({ paused: true });
+      // A browser that never hands over the mouse — one built into another app, say — cannot keep the pointer
+      // inside the game at all. Only then, and only after several honest tries, is it played with the pointer loose.
+      const now = performance.now();
+      if (!this.lockFails) this.lockFailedAt = now;
+      if (++this.lockFails >= 4 && now - this.lockFailedAt > 4000 && !Arena.everLocked) {
+        this.noLock = true;
+        useArena.setState({ paused: false });
+        this.warnLoose();
+      }
+    }, 500);
+  }
+
+  /** Says, on the screen, that the mouse could not be captured here and where it can be. */
+  private warnLoose(): void {
+    if (this.looseNote) return;
+    const note = (this.looseNote = document.createElement("div"));
+    note.className = "a-loose";
+    note.textContent = "Этот браузер не даёт захватить мышь, поэтому курсор уходит за окно. Открой игру в Chrome, Safari или Edge — там мышь не выйдет за пределы игры.";
+    document.body.appendChild(note);
   }
 
   private resize(): void {
     const w = this.canvas.clientWidth || innerWidth;
     const h = this.canvas.clientHeight || innerHeight;
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, LIGHT ? 1.5 : 2));
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, LIGHT ? 1.5 : 2) * this.res);
     this.renderer.setSize(w, h, false);
     for (const cam of [this.camera, this.vmCamera]) {
       cam.aspect = w / h;
@@ -2361,7 +2494,50 @@ export class Arena {
   // -------------------------------------------------------------------------------------------
   // Loop
 
+  private frameN = 0;
+  /** The share of full resolution being drawn, and what the pacing below needs to remember. */
+  private res = 1;
+  private pace = { t: 0, n: 0, wait: 4, calm: 0, lastMs: 0, vain: 0, off: false };
+
+  /**
+   * Keeps the game smooth on a machine it is too heavy for: when frames come slower than about fifty
+   * a second, fewer pixels are drawn; when there has been room for a while, they come back. If
+   * drawing fewer does not help — the browser itself is holding the rate down — it stops trying.
+   */
+  private keepPace(dt: number): void {
+    const p = this.pace;
+    if (p.off || dt > 0.25) return;
+    if (p.wait > 0) return void (p.wait -= dt);
+    p.t += dt;
+    p.n++;
+    if (p.t < 1) return;
+    const ms = (p.t / p.n) * 1000;
+    p.t = 0;
+    p.n = 0;
+    p.calm += 1;
+    const was = this.res;
+    if (ms > 21 && this.res > 0.5) {
+      // Slower, and it did not help the last time either: this is not something fewer pixels can fix.
+      if (p.lastMs && ms > p.lastMs - 1.5 && ++p.vain >= 2) {
+        p.off = true;
+        this.res = 1;
+      } else this.res = Math.max(0.5, this.res - (ms > 30 ? 0.2 : 0.1));
+      p.lastMs = ms;
+      p.calm = 0;
+    } else if (ms < 17.6 && this.res < 1 && p.calm > 12) {
+      this.res = Math.min(1, this.res + 0.1);
+      p.calm = 6;
+      p.lastMs = 0;
+      p.vain = 0;
+    }
+    if (this.res !== was) {
+      this.resize();
+      p.wait = 0.6;
+    }
+  }
+
   private render(): void {
+    this.renderer.shadowMap.needsUpdate = (this.frameN++ & 1) === 0;
     this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
     this.renderer.clearDepth();
@@ -2373,6 +2549,7 @@ export class Arena {
     const frame = (now: number) => {
       this.raf = requestAnimationFrame(frame);
       const dt = Math.min(0.05, (now - this.last) / 1000);
+      this.keepPace((now - this.last) / 1000);
       this.last = now;
       // Whatever is in the air keeps moving, paused or not.
       this.map.tick?.(dt, this.camera.position);
@@ -2588,12 +2765,29 @@ export class Arena {
     this.camera.rotation.set(Math.max(-1.55, Math.min(1.55, this.pitch + this.kick)), this.yaw, -this.strafeK * 0.014, "YXZ");
   }
 
+  /** With the mouse loose on the screen: no pointer over the fight, and the view goes on turning at the edges. */
+  private freeMouse(dt: number): void {
+    const playing = this.noLock && !TOUCH && !this.over && !this.buyOpen && !this.picking && !this.halted;
+    if (playing !== this.cursorHidden) {
+      this.cursorHidden = playing;
+      document.body.style.cursor = playing ? "none" : "";
+    }
+    if (!playing || !this.me.alive) return;
+    const edge = (v: number) => (v < 0.05 ? (0.05 - v) / 0.05 : v > 0.95 ? -(v - 0.95) / 0.05 : 0);
+    this.yaw += edge(this.mouse.x) * 2.6 * dt;
+    this.pitch = Math.max(-1.5, Math.min(1.5, this.pitch + edge(this.mouse.y) * 1.6 * dt));
+  }
+
   private update(dt: number): void {
+    this.freeMouse(dt);
     this.updateRound(dt);
     if (this.over) return;
     this.updateMe(dt);
     this.world.step();
-    for (const b of this.bots) b.update(dt);
+    for (const b of this.bots) {
+      b.update(dt);
+      b.model.setFar(b.model.group.position.distanceToSquared(this.camera.position) > 24 * 24);
+    }
     if (TOUCH) this.autoFire(dt);
     this.updateDrops(dt);
     this.updateCorpses(dt);
@@ -2640,6 +2834,8 @@ export class Arena {
   }
 
   dispose(): void {
+    document.body.style.cursor = "";
+    this.looseNote?.remove();
     cancelAnimationFrame(this.raf);
     this.nades.clear();
     sfx.hush();

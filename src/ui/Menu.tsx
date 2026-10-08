@@ -14,9 +14,11 @@ import { short } from "../solana/chain";
 import { useWallet } from "../solana/wallet";
 import { Arsenal } from "./Arsenal";
 import { Cases } from "./Cases";
+import { Gift } from "./Gift";
 import { Inventory } from "./Inventory";
 import { Market } from "./Market";
 import { PassPage, RewardIcon } from "./Pass";
+import { QuestsPage } from "./Quests";
 import { Shop } from "./Shop";
 import { TOUCH, goFullscreen } from "../device";
 import { music, sfx } from "../game/audio";
@@ -138,7 +140,7 @@ function MatchPicker({ thumbs, onClose }: { thumbs: Partial<Record<MapId, string
 }
 
 /** The lobby: the agent in the middle, everything else around the edges, one big button to play. */
-function Lobby({ go, toWorld }: { go(p: Page): void; toWorld(): void }) {
+function Lobby({ go }: { go(p: Page): void }) {
   const s = useStore();
   const canvas = useRef<HTMLDivElement>(null);
   const scene = useRef<LobbyScene | null>(null);
@@ -153,7 +155,7 @@ function Lobby({ go, toWorld }: { go(p: Page): void; toWorld(): void }) {
   const hi = level * level * 120;
   const passLvl = passLevel(s.passXp);
   const toClaim = Array.from({ length: passLvl }, (_, i) => i + 1).filter((l) => !s.claimed.includes(`f${l}`) || (s.premium && !s.claimed.includes(`p${l}`))).length;
-  const questsReady = s.missions.list.some((m) => !m.claimed && m.n >= MISSION_BY_ID[m.id].need);
+  const questsReady = [...s.missions.list, ...s.missions.season].filter((m) => !m.claimed && m.n >= MISSION_BY_ID[m.id].need).length;
   const dots: Partial<Record<Page, number | boolean>> = { cases: s.cases, pass: toClaim, quests: questsReady };
   const next = Math.min(SEASON.levels, passLvl + 1);
 
@@ -226,7 +228,6 @@ function Lobby({ go, toWorld }: { go(p: Page): void; toWorld(): void }) {
               Музыка <b>{Math.round(s.settings.music * 100)}%</b>
               <input type="range" min="0" max="1" step="0.05" value={s.settings.music} onChange={(e) => s.setSettings({ music: Number(e.target.value) })} />
             </label>
-            {!TOUCH && <button className="ps-drop-item" onClick={toWorld}><img src="/art/icon_survival.png" alt="" />Режим выживания</button>}
             {import.meta.env.DEV && <button className="ps-drop-item" onClick={() => s.unlockAll()} title="Для проверки: все оружие во всех скинах, все ножи и все агенты"><img src="/art/case.png" alt="" />Выдать все скины</button>}
           </div>
         )}
@@ -340,7 +341,7 @@ export function Menu() {
   const ready = s.contracts.filter((c) => c.progress > 0).length;
 
   if (mode === "shooter") {
-    if (page === "play") return <div className="menu paint ps home"><Lobby go={open} toWorld={() => switchMode("world")} /></div>;
+    if (page === "play") return <div className="menu paint ps home"><Lobby go={open} /><Gift /></div>;
     return (
       <div className="menu paint ps" data-page={page}>
         <div className="menu-sky" />
@@ -356,7 +357,8 @@ export function Menu() {
           : page === "agents" ? <Arsenal key="agents" start="agents" go={open} />
           : page === "cases" ? <Cases />
           : page === "market" ? <Market go={open} />
-          : <PassPage />}
+          : page === "quests" ? <QuestsPage go={open} />
+          : <PassPage go={open} />}
       </div>
     );
   }

@@ -193,6 +193,43 @@ const AIM_POS = new THREE.Vector3(-0.085, 0.275, 0.27);
 const LOW_POS = new THREE.Vector3(-0.09, 0.1, 0.235);
 const LEFT_HOLD = new THREE.Vector3(0, -0.02, -0.22);
 
+/** A piece of the body that can be hit: a box around it in that piece's own space, which moves with the piece. */
+interface HitPart {
+  node: THREE.Object3D;
+  box: THREE.Box3;
+  head: boolean;
+  inv: THREE.Matrix4;
+}
+
+/** The box around a piece's meshes, measured in the piece's own space so the pose does not matter. */
+function localBox(root: THREE.Object3D, skip: Set<THREE.Object3D>): THREE.Box3 {
+  root.updateWorldMatrix(true, true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+  const box = new THREE.Box3();
+  const one = new THREE.Box3();
+  const m = new THREE.Matrix4();
+  const walk = (o: THREE.Object3D) => {
+    if (skip.has(o)) return;
+    const mesh = o as THREE.Mesh;
+    if (mesh.isMesh) {
+      if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+      box.union(one.copy(mesh.geometry.boundingBox!).applyMatrix4(m.multiplyMatrices(inv, mesh.matrixWorld)));
+    }
+    for (const c of o.children) walk(c);
+  };
+  walk(root);
+  return box;
+}
+
+/** What a shot found: how far along it, and whether that was the head. */
+export interface RigHit {
+  t: number;
+  head: boolean;
+}
+
+const HA = new THREE.Vector3();
+const HB = new THREE.Vector3();
+
 export class AgentRig {
   readonly group = new THREE.Group();
   readonly def: AgentDef;
@@ -227,6 +264,9 @@ export class AgentRig {
   private blinkT = 1 + Math.random() * 3;
   private mood: Mood | "" = "";
   private v = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  /** Hitboxes: one box for each piece of the body, so a shot lands where the model is and nowhere else. */
+  private hitParts: HitPart[] = [];
+  private hitStale = true;
 
   constructor(id: string, private team: number, edge = 0.012) {
     this.def = AGENT_BY_ID[id] ?? AGENTS[0];
@@ -243,6 +283,68 @@ export class AgentRig {
     this.mount.rotation.order = "YXZ";
     this.setMood("idle");
     this.update(0, { vx: 0, vz: 0, pitch: 0, aim: 0 });
+    // Things that trail behind or stick up are not the body: an antenna, a cloak, a cable.
+    const skip = new Set<THREE.Object3D>([...(p.antenna ? [p.antenna] : []), ...p.tail]);
+    const part = (node: THREE.Object3D, head: boolean, limit: [number, number, number, number, number, number] | null = null) => {
+      const box = localBox(node, skip);
+      if (box.isEmpty()) return;
+      // A hat brim or a backpack must not make the target bigger than the body under it.
+      if (limit) box.intersect(new THREE.Box3(new THREE.Vector3(limit[0], limit[1], limit[2]), new THREE.Vector3(limit[3], limit[4], limit[5])));
+      // Heads are round and the box is not: pulled in, so the corners of it are not free head shots.
+      if (head) {
+        box.min.set(box.min.x * 0.84, Math.max(box.min.y, 0.05), box.min.z * 0.84);
+        box.max.set(box.max.x * 0.84, box.max.y - 0.02, box.max.z * 0.84);
+      }
+      this.hitParts.push({ node, box, head, inv: new THREE.Matrix4() });
+    };
+    part(p.head, true, [-0.3, -0.04, -0.3, 0.3, 0.52, 0.3]);
+    part(p.chest, false, [-0.4, -0.1, -0.27, 0.4, 0.5, 0.27]);
+    part(p.pelvis, false, [-0.34, -0.3, -0.26, 0.34, 0.2, 0.26]);
+    for (const limb of [p.upper, p.fore, p.hand, p.thigh, p.shin, p.foot]) for (const node of limb) part(node, false);
+  }
+
+  /**
+   * Does a shot from `origin` along `dir` reach the body within `dist`? `pad` is the size of what
+   * was fired. The nearest piece struck wins; the answer goes in `out`.
+   */
+  rayHit(origin: THREE.Vector3, dir: THREE.Vector3, dist: number, pad: number, out: RigHit): boolean {
+    if (this.hitStale) {
+      this.group.updateWorldMatrix(true, true);
+      for (const p of this.hitParts) p.inv.copy(p.node.matrixWorld).invert();
+      this.hitStale = false;
+    }
+    let best = Infinity;
+    let headAt = Infinity;
+    for (const p of this.hitParts) {
+      const a = HA.copy(origin).applyMatrix4(p.inv);
+      const b = HB.copy(origin).addScaledVector(dir, dist).applyMatrix4(p.inv);
+      // The path against the box, slab by slab: where it enters and where it leaves.
+      let t0 = 0;
+      let t1 = 1;
+      for (const k of ["x", "y", "z"] as const) {
+        const lo = p.box.min[k] - pad;
+        const hi = p.box.max[k] + pad;
+        const d = b[k] - a[k];
+        if (Math.abs(d) < 1e-7) {
+          if (a[k] < lo || a[k] > hi) t1 = -1;
+        } else {
+          const n = (lo - a[k]) / d;
+          const f = (hi - a[k]) / d;
+          t0 = Math.max(t0, Math.min(n, f));
+          t1 = Math.min(t1, Math.max(n, f));
+        }
+        if (t0 > t1) break;
+      }
+      if (t0 > t1) continue;
+      const t = t0 * dist;
+      if (t < best) best = t;
+      if (p.head && t < headAt) headAt = t;
+    }
+    if (best === Infinity) return false;
+    out.t = best;
+    // A head shot counts as one even when a raised arm or a shoulder is a hair nearer.
+    out.head = headAt <= best + 0.12;
+    return true;
   }
 
   /** Puts a weapon in the agent's hands. The model's own muzzle and left-hand grip are used. */
@@ -253,6 +355,7 @@ export class AgentRig {
     if (!w) return;
     w.group.scale.setScalar(scale);
     this.mount.add(w.group);
+    if (this.far) w.group.traverse((o) => void (o.userData.shell && (o.visible = false)));
     this.muzzle = w.muzzle;
     // The second pistol of a pair is the left hand's; otherwise the left hand supports the barrel.
     if (w.muzzle2) this.left.set(-0.3, 0, 0);
@@ -301,6 +404,16 @@ export class AgentRig {
     this.fireT = 9;
   }
 
+  /** Far away the ink outline is thinner than a pixel: it is not drawn there, which halves what this agent costs. */
+  private far = false;
+  setFar(far: boolean): void {
+    if (far === this.far) return;
+    this.far = far;
+    this.group.traverse((o) => {
+      if (o.userData.shell) o.visible = !far;
+    });
+  }
+
   get dead(): boolean {
     return this.deadT >= 0;
   }
@@ -316,6 +429,7 @@ export class AgentRig {
   }
 
   update(dt: number, i: RigInput): void {
+    this.hitStale = true;
     const D = DIM;
     const P = this.parts;
     const [a, b, c, d, e, f] = this.v;

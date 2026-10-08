@@ -6,7 +6,7 @@
  * than both, and the Lumberjack and Miner professions add to everything.
  */
 
-import RAPIER from "@dimforge/rapier3d-compat";
+import { RAPIER } from "../physics";
 import * as THREE from "three";
 import { skillOf, useStore } from "../store";
 import { sfx } from "./audio";

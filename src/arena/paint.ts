@@ -3,7 +3,7 @@
  * to the weapon that fired it, hurts whoever it touches and leaves a scorch where it lands.
  */
 
-import RAPIER from "@dimforge/rapier3d-compat";
+import { RAPIER } from "../physics";
 import * as THREE from "three";
 import { sfx } from "../game/audio";
 import type { MarkerDef } from "./markers";
@@ -22,7 +22,15 @@ export interface Actor {
   chest(out: THREE.Vector3): THREE.Vector3;
   velocity: THREE.Vector3;
   hurt(by: Actor, dmg: number, weapon: string, head: boolean): void;
+  /**
+   * Hitboxes of its own: does a shot from `origin` along `dir` reach it within `dist`? Those who
+   * have none are hit on the capsule they walk in.
+   */
+  hitTest?(origin: THREE.Vector3, dir: THREE.Vector3, dist: number, pad: number, out: { t: number; head: boolean }): boolean;
 }
+
+/** How much kinder than the model a hitbox is, metres: a shot that grazes still counts. */
+const GRAZE = 0.02;
 
 interface Ball {
   p: THREE.Vector3;
@@ -86,6 +94,7 @@ export class Paint {
   private color = new THREE.Color();
   private tmp = new THREE.Vector3();
   private tmp2 = new THREE.Vector3();
+  private found = { t: 0, head: false };
 
   constructor(
     private scene: THREE.Scene,
@@ -255,18 +264,36 @@ export class Paint {
       const speed = b.v.length();
       const step = speed * dt;
       const dir = this.tmp2.copy(b.v).multiplyScalar(1 / (speed || 1));
-      const hit = this.world.castRayAndGetNormal(new RAPIER.Ray(b.p, dir), step + b.r, true, undefined, undefined, undefined, undefined, (c) => {
-        const a = this.byHandle.get(c.handle);
-        if (!a) return true;
-        return a.alive && this.enemy(b.owner, a) && !b.hit.has(a.id);
-      });
-      if (!hit) {
+      // The scenery first, then everyone who stands nearer than it along this stretch of the flight.
+      const ray = new RAPIER.Ray(b.p, dir);
+      const wall = this.world.castRayAndGetNormal(ray, step + b.r, true, undefined, undefined, undefined, undefined, (c) => !this.byHandle.has(c.handle));
+      let reach = wall ? wall.timeOfImpact : step + b.r;
+      let target: Actor | null = null;
+      let head = false;
+      for (const a of actors) {
+        if (!a.alive || !this.enemy(b.owner, a) || b.hit.has(a.id)) continue;
+        // Nowhere near this stretch: no need to look closer.
+        const to = a.chest(this.tmp).sub(b.p);
+        const along = Math.max(0, Math.min(reach, to.dot(dir)));
+        if (to.addScaledVector(dir, -along).lengthSq() > 2.6) continue;
+        if (a.hitTest) {
+          if (!a.hitTest(b.p, dir, reach, b.r + GRAZE, this.found)) continue;
+          reach = this.found.t;
+          head = this.found.head;
+        } else {
+          const t = a.collider.castRay(ray, reach, true);
+          if (t < 0 || t >= reach) continue;
+          reach = t;
+          head = b.p.y + dir.y * t - a.chest(this.tmp).y > 0.42;
+        }
+        target = a;
+      }
+      if (!wall && !target) {
         b.p.addScaledVector(dir, step);
         continue;
       }
-      const at = b.p.clone().addScaledVector(dir, Math.max(0, hit.timeOfImpact - b.r * 0.5));
-      const normal = new THREE.Vector3(hit.normal.x, hit.normal.y, hit.normal.z);
-      const target = this.byHandle.get(hit.collider.handle);
+      const at = b.p.clone().addScaledVector(dir, Math.max(0, reach - b.r * 0.5));
+      const normal = wall ? new THREE.Vector3(wall.normal.x, wall.normal.y, wall.normal.z) : dir.clone().negate();
       if (target) {
         b.hit.add(target.id);
         if (target.protect > 0) {
@@ -281,7 +308,6 @@ export class Paint {
           b.v.set(0, 0, 0);
           continue;
         }
-        const head = at.y - target.chest(this.tmp).y > 0.42;
         target.hurt(b.owner, Math.round(b.dmg * (head ? b.def.head : 1)), b.def.name, head);
         if (b.def.splash && !b.child) this.burst(at, b.def.splash[0], b.def.splash[1], b.owner, b.color, b.def.name);
         if (b.def.cluster && !b.child) this.cluster(b, at);

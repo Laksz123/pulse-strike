@@ -22,10 +22,12 @@ export interface AgentDef {
   free?: boolean;
   /** Battle pass only: never drops from a case. */
   pass?: boolean;
+  /** Only from the welcome wheel: not in cases, not in the shop. */
+  gift?: boolean;
 }
 
 export const AGENTS: AgentDef[] = [
-  { id: "byte", name: "Byte", rarity: 3, about: "Старый телевизор, который отрастил ноги и характер. Что у него на уме — видно по экрану.", suit: 0xffc21a, legs: 0x26305c, trim: 0x1b2244, skin: 0xf4efe2, glove: 0xf7f7f2, free: true },
+  { id: "byte", name: "Byte", rarity: 4, about: "Старый телевизор, который отрастил ноги и характер. Что у него на уме — видно по экрану.", suit: 0xffc21a, legs: 0x26305c, trim: 0x1b2244, skin: 0xf4efe2, glove: 0xf7f7f2, gift: true },
   { id: "rookie", name: "Rookie", rarity: 0, about: "Шлем, разгрузка и желание всем что-то доказать.", suit: 0x5b6b4a, legs: 0x3d4636, trim: 0x2a2f2a, skin: 0xe2b48c, free: true },
   { id: "rush", name: "Rush", rarity: 0, about: "Курьер, который доставляет быстрее пули.", suit: 0xf2c230, legs: 0x2b3340, trim: 0x1d2229, skin: 0xc98f62, free: true },
   { id: "wrench", name: "Wrench", rarity: 1, about: "Чинит прототипы прямо под огнём. Маску не снимает.", suit: 0xe8742a, legs: 0x39414f, trim: 0x23272e, skin: 0xd9a57c, glow: 0xffb347 },
@@ -39,7 +41,7 @@ export const AGENTS: AgentDef[] = [
 ];
 
 export const AGENT_BY_ID: Record<string, AgentDef> = Object.fromEntries(AGENTS.map((a) => [a.id, a]));
-export const DEFAULT_AGENT = "byte";
+export const DEFAULT_AGENT = "rookie";
 /** Sleeve and glove colours of each agent, for the arms seen in first person. */
 export const ARM_COLORS: Record<string, [number, number]> = {
   byte: [0xffc21a, 0xf7f7f2], rookie: [0x7a9a4e, 0x3f4f2c], rush: [0xe5383b, 0x2a2d36], wrench: [0x3a4150, 0x8a5a2b], scout: [0xd2b272, 0xb9825a],
@@ -80,7 +82,7 @@ export function rollAgent(): AgentItem {
       break;
     }
   }
-  const pool = AGENTS.filter((a) => a.rarity === rarity && !a.pass && !a.free);
-  const pick = pool.length ? pool : AGENTS.filter((a) => !a.pass && !a.free);
+  const pool = AGENTS.filter((a) => a.rarity === rarity && !a.pass && !a.free && !a.gift);
+  const pick = pool.length ? pool : AGENTS.filter((a) => !a.pass && !a.free && !a.gift);
   return newAgent(pick[Math.floor(Math.random() * pick.length)].id);
 }

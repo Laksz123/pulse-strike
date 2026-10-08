@@ -5,9 +5,10 @@ import { markerIcon } from "./arena/render";
 import { App } from "./ui/App";
 import "./styles.css";
 import { useStore } from "./store";
-import { fitUi } from "./device";
+import { fitUi, tame } from "./device";
 
 fitUi();
+tame();
 
 // Handy in the console while developing.
 if (import.meta.env.DEV) {

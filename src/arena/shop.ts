@@ -1,6 +1,6 @@
 /**
- * The shop: what coins are for. Coins come from playing; they buy cases, and each day a handful
- * of skins and agents picked for that day. Nothing can be sold back for coins — an item's way
+ * The shop: what coins are for. Coins come from playing; they buy cases (see cases.ts), and each
+ * day a handful of skins and agents picked for that day. Nothing can be sold back for coins — an item's way
  * out of the inventory is the market, for SOL.
  */
 
@@ -11,12 +11,6 @@ import type { Reward } from "./pass";
 /** Coin prices by rarity. Ultra items are never sold: they are found, earned or traded. */
 export const SKIN_PRICE = [150, 300, 700, 1600, 4000, 0];
 export const AGENT_PRICE = [0, 900, 1800, 3500, 8000, 0];
-
-export const CASE_PACKS = [
-  { n: 1, price: 250, tag: "" },
-  { n: 5, price: 1100, tag: "−12%" },
-  { n: 10, price: 2000, tag: "−20%" },
-];
 
 /** Coins for SOL: the one place real value comes into the economy. */
 export const COIN_PACKS = [
@@ -64,7 +58,7 @@ export function dailyOffers(day: string): Offer[] {
     const pick = pool.find((s) => (r -= weight[s.rarity]) < 0) ?? pool[0];
     out.push({ key: `w:${pick.id}:${pick.skin}`, reward: { kind: "skin", id: pick.id, skin: pick.skin }, price: SKIN_PRICE[pick.rarity] });
   }
-  const agents = AGENTS.filter((a) => !a.free && !a.pass && AGENT_PRICE[a.rarity] > 0);
+  const agents = AGENTS.filter((a) => !a.free && !a.pass && !a.gift && AGENT_PRICE[a.rarity] > 0);
   for (let i = 0; i < 2 && agents.length; i++) {
     const a = agents.splice(Math.floor(rnd() * agents.length), 1)[0];
     out.push({ key: `a:${a.id}`, reward: { kind: "agent", id: a.id }, price: AGENT_PRICE[a.rarity] });

@@ -1,4 +1,7 @@
-/** Synthesised sound: no audio files to load. Every sound is filtered noise or a short tone. */
+/**
+ * Synthesised sound: no audio files to load. Everything in a fight is shaped noise and low knocks —
+ * air, plastic and paint — and tones are kept for the menus and the bomb.
+ */
 
 import type { WeaponClass } from "./weapons";
 
@@ -19,7 +22,14 @@ function ac(): AudioContext | null {
     }
     master = ctx.createGain();
     master.gain.value = 0.5 * level.sound;
-    master.connect(ctx.destination);
+    // A limiter of sorts: a long burst of fire stays one loud thing instead of piling up and crackling.
+    const squash = ctx.createDynamicsCompressor();
+    squash.threshold.value = -16;
+    squash.knee.value = 10;
+    squash.ratio.value = 6;
+    squash.attack.value = 0.002;
+    squash.release.value = 0.12;
+    master.connect(squash).connect(ctx.destination);
     musicBus = ctx.createGain();
     musicBus.gain.value = 0.3 * level.music;
     musicBus.connect(ctx.destination);
@@ -64,6 +74,67 @@ function tone(freq: number, to: number, dur: number, gain: number, type: Oscilla
   o.stop(c.currentTime + dur + 0.02);
 }
 
+/**
+ * Shaped noise with a soft start and a filter that slides from `freq` to `to`: air, pops, splats.
+ * `delay` is in seconds and is scheduled, so a sound built from several of these stays in step.
+ */
+function puff(freq: number, dur: number, gain: number, q = 1, type: BiquadFilterType = "bandpass", to = freq, attack = 0.002, delay = 0): void {
+  const c = ac();
+  if (!c || !noise || !master) return;
+  const at = c.currentTime + delay;
+  const src = c.createBufferSource();
+  src.buffer = noise;
+  src.playbackRate.value = 0.85 + Math.random() * 0.3;
+  const f = c.createBiquadFilter();
+  f.type = type;
+  f.frequency.setValueAtTime(freq, at);
+  f.frequency.exponentialRampToValueAtTime(Math.max(40, to), at + dur);
+  f.Q.value = q;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.exponentialRampToValueAtTime(Math.max(0.0002, gain), at + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+  src.connect(f).connect(g).connect(out ?? master);
+  src.start(at, Math.random() * 0.5, dur + 0.05);
+}
+
+/** A low knock: a sine that drops. It is felt more than heard, and never high enough to beep. */
+function knock(freq: number, to: number, dur: number, gain: number, delay = 0): void {
+  const c = ac();
+  if (!c || !master) return;
+  const at = c.currentTime + delay;
+  const o = c.createOscillator();
+  o.frequency.setValueAtTime(freq, at);
+  o.frequency.exponentialRampToValueAtTime(Math.max(25, to), at + dur);
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.exponentialRampToValueAtTime(Math.max(0.0002, gain), at + 0.003);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+  o.connect(g).connect(out ?? master);
+  o.start(at);
+  o.stop(at + dur + 0.03);
+}
+
+/**
+ * A paintball marker going off: the hollow pop of the barrel, the crack of the valve, the air
+ * that follows and the bolt knocking home. `pitch` makes it smaller or bigger, `weight` louder in
+ * the low end, `len` longer. No two shots are quite the same, so a burst does not buzz.
+ */
+function marker(v: number, pitch = 1, weight = 1, len = 1): void {
+  const p = pitch * (0.94 + Math.random() * 0.12);
+  puff(1050 * p, 0.08 * len, 0.9 * v * weight, 4.5, "bandpass", 480 * p);
+  puff(2900 * p, 0.03 * len, 0.38 * v, 1, "bandpass", 1600 * p);
+  puff(6200, 0.06 * len, 0.1 * v, 0.7, "highpass", 4800, 0.004);
+  knock(180 * p, 65, 0.075 * len, 0.55 * v * weight);
+}
+
+/** Paint landing on something: wet, short, low. `size` 1 is a ball on a wall. */
+function splatter(v: number, size = 1): void {
+  puff(1300 / size, 0.09 * size, 0.42 * v, 0.9, "lowpass", 240, 0.002);
+  puff(3200, 0.025, 0.12 * v, 1.4, "bandpass", 1900);
+  if (size > 1.2) knock(150, 60, 0.12 * size, 0.4 * v);
+}
+
 const SHOT: Record<WeaponClass, [number, number, number]> = {
   crossbow: [900, 0.12, 0.35],
   pistol: [2600, 0.16, 0.5],
@@ -87,24 +158,24 @@ function panned(pan: number, make: () => void): void {
   setTimeout(() => p.disconnect(), 2500);
 }
 
-/** Every weapon has its own voice, built from the same two things: shaped noise and a sliding tone. */
+/** Every weapon has its own voice, and all of them are markers: air and a knock, never a tone. */
 const GUNS: Record<string, (v: number) => void> = {
-  dvoyka: (v) => (burst(3200, 0.06, 0.5 * v, 1.5, "bandpass"), tone(900, 260, 0.07, 0.25 * v, "square")),
-  baraban: (v) => (burst(900, 0.28, 0.9 * v, 0.7), tone(220, 60, 0.22, 0.5 * v, "sawtooth"), burst(4000, 0.05, 0.4 * v, 1, "highpass")),
-  sprinter: (v) => (burst(2400, 0.09, 0.6 * v, 1.2, "bandpass"), tone(700, 180, 0.09, 0.3 * v, "sawtooth")),
-  zalp: (v) => (burst(700, 0.34, 1.0 * v, 0.6), burst(2600, 0.12, 0.5 * v, 1, "bandpass"), tone(160, 50, 0.25, 0.5 * v, "sine")),
-  treshotka: (v) => (burst(2800, 0.05, 0.5 * v, 2, "bandpass"), tone(520, 200, 0.05, 0.25 * v, "square")),
-  ochered: (v) => (burst(3000, 0.05, 0.5 * v, 2.2, "bandpass"), tone(1100, 400, 0.05, 0.22 * v, "triangle")),
-  raduga: (v) => (burst(2200, 0.04, 0.42 * v, 2, "bandpass"), tone(300, 150, 0.04, 0.2 * v, "sawtooth")),
-  gidrant: (v) => burst(5200, 0.08, 0.16 * v, 0.8, "highpass"),
-  dalnoboy: (v) => (burst(1400, 0.5, 1.0 * v, 0.6), tone(1800, 90, 0.3, 0.4 * v, "sawtooth"), void setTimeout(() => burst(500, 0.6, 0.25 * v, 0.5), 90)),
-  impuls: (v) => (tone(200, 1600, 0.08, 0.3 * v, "sawtooth"), burst(1800, 0.3, 0.7 * v, 0.8, "bandpass"), tone(120, 40, 0.4, 0.5 * v, "sine")),
-  veer: (v) => (burst(1800, 0.18, 0.7 * v, 0.8, "bandpass"), tone(600, 300, 0.12, 0.25 * v, "square")),
-  rikoshet: (v) => (tone(420, 980, 0.09, 0.4 * v, "sine"), tone(980, 620, 0.12, 0.25 * v, "triangle"), burst(2400, 0.04, 0.3 * v, 2, "bandpass")),
-  mortira: (v) => (tone(180, 45, 0.3, 0.8 * v, "sine"), burst(500, 0.25, 0.6 * v, 0.7)),
-  lipuchka: (v) => (tone(300, 90, 0.16, 0.6 * v, "sine"), burst(900, 0.1, 0.4 * v, 3, "bandpass")),
-  roy: (v) => ([0, 40, 80].forEach((d, i) => setTimeout(() => tone(1400 + i * 260, 700, 0.09, 0.22 * v, "square"), d)), burst(3000, 0.05, 0.25 * v, 2, "bandpass")),
-  sverhnova: (v) => (tone(90, 40, 0.7, 0.8 * v, "sine"), tone(1600, 200, 0.5, 0.25 * v, "sawtooth"), burst(700, 0.6, 0.5 * v, 0.5)),
+  dvoyka: (v) => marker(v * 0.85, 1.3, 0.7, 0.8),
+  baraban: (v) => (marker(v, 0.72, 1.35, 1.5), puff(520, 0.22, 0.4 * v, 0.7, "lowpass", 130, 0.003, 0.01)),
+  sprinter: (v) => marker(v, 1, 1, 1),
+  zalp: (v) => (marker(v, 0.6, 1.45, 1.7), puff(1900, 0.2, 0.55 * v, 0.6, "lowpass", 280), knock(120, 45, 0.2, 0.5 * v)),
+  treshotka: (v) => marker(v * 0.9, 1.12, 0.8, 0.75),
+  ochered: (v) => marker(v * 0.9, 1.22, 0.85, 0.7),
+  raduga: (v) => marker(v * 0.8, 1.02, 0.65, 0.55),
+  gidrant: (v) => puff(4600, 0.08, 0.15 * v, 0.7, "highpass", 3400, 0.01),
+  dalnoboy: (v) => (marker(v, 0.52, 1.6, 2.3), puff(700, 0.55, 0.3 * v, 0.6, "lowpass", 110, 0.004, 0.04), puff(3600, 0.35, 0.07 * v, 0.6, "highpass", 2400, 0.02, 0.05)),
+  impuls: (v) => (marker(v, 0.8, 1.25, 1.6), puff(900, 0.16, 0.3 * v, 2, "bandpass", 3200, 0.02), knock(110, 40, 0.3, 0.45 * v)),
+  veer: (v) => (marker(v, 0.78, 1.2, 1.3), puff(2300, 0.12, 0.3 * v, 0.8, "bandpass", 900)),
+  rikoshet: (v) => (marker(v, 0.92, 1, 1.05), puff(1700, 0.06, 0.3 * v, 9, "bandpass", 1250, 0.002, 0.03)),
+  mortira: (v) => (knock(140, 42, 0.32, 0.9 * v), puff(480, 0.26, 0.6 * v, 0.7, "lowpass", 110), puff(2400, 0.05, 0.2 * v, 1, "bandpass", 1200)),
+  lipuchka: (v) => (knock(230, 75, 0.16, 0.6 * v), puff(850, 0.11, 0.45 * v, 2.5, "bandpass", 380), puff(3000, 0.03, 0.15 * v, 1.5, "bandpass", 2000)),
+  roy: (v) => [0, 0.04, 0.08].forEach((d, i) => (puff(1900 + i * 250, 0.06, 0.32 * v, 3.5, "bandpass", 850, 0.002, d), knock(210, 100, 0.05, 0.25 * v, d))),
+  sverhnova: (v) => (knock(95, 34, 0.7, 0.9 * v), puff(650, 0.6, 0.55 * v, 0.6, "lowpass", 90), puff(2600, 0.25, 0.16 * v, 0.7, "highpass", 1500, 0.01)),
 };
 
 /** Sounds that go on for as long as something is held: a charge building, barrels spinning, a stream. */
@@ -296,26 +367,24 @@ export const sfx = {
     setTimeout(() => tone(780, 1040, 0.2, 0.14, "sine"), 120);
   },
   fall: () => burst(240, 0.5, 0.6),
-  empty: () => tone(900, 700, 0.04, 0.15, "square"),
+  empty: () => (puff(3000, 0.02, 0.3, 5, "bandpass", 2200), knock(240, 160, 0.03, 0.15)),
   reload: () => {
     burst(1800, 0.06, 0.25, 4, "bandpass");
     setTimeout(() => burst(2400, 0.07, 0.3, 4, "bandpass"), 320);
   },
-  hit: () => tone(1500, 1100, 0.05, 0.16, "square"),
-  kill: () => {
-    tone(700, 1400, 0.12, 0.2, "triangle");
-  },
-  hurt: () => burst(500, 0.18, 0.5),
+  /** A charge landing on someone: a slap of paint and a knock. */
+  hit: () => (puff(1700, 0.075, 0.6, 1.1, "lowpass", 360), puff(3400, 0.02, 0.2, 1.6, "bandpass", 2200), knock(230, 95, 0.065, 0.5)),
+  /** The one that put them down: a heavier splat with a thump under it. */
+  kill: () => (puff(1100, 0.22, 0.75, 0.8, "lowpass", 150), knock(160, 46, 0.24, 0.8), puff(2600, 0.05, 0.3, 1.6, "bandpass", 1300, 0.002, 0.07), knock(110, 40, 0.16, 0.45, 0.07)),
+  /** Taking one yourself: paint on the mask and a thump in the chest. */
+  hurt: () => (puff(900, 0.16, 0.6, 0.8, "lowpass", 180), knock(130, 55, 0.14, 0.6)),
   pickup: () => {
     tone(620, 930, 0.09, 0.16, "triangle");
     setTimeout(() => tone(930, 1240, 0.1, 0.14, "triangle"), 70);
   },
   /** A paintball marker firing: a short pneumatic pop. */
-  paint: (volume = 1, pitch = 1) => {
-    burst(1500 * pitch, 0.07, 0.4 * volume, 2.5, "bandpass");
-    tone(520 * pitch, 180, 0.07, 0.22 * volume, "triangle");
-  },
-  splat: (volume = 1) => burst(700, 0.09, 0.3 * volume, 1.2),
+  paint: (volume = 1, pitch = 1) => marker(volume, pitch),
+  splat: (volume = 1) => splatter(volume, volume > 0.8 ? 1.5 : 1),
   tagged: () => {
     tone(300, 90, 0.35, 0.3, "sawtooth");
     burst(500, 0.25, 0.4);
@@ -373,11 +442,14 @@ export const sfx = {
     }),
   land: () => (tone(110, 45, 0.14, 0.7, "sine"), burst(600, 0.1, 0.3, 1)),
   /** A reload you can hear: the magazine out, the next one home, the action worked. */
-  magOut: () => (burst(1500, 0.05, 0.3, 3, "bandpass"), tone(420, 300, 0.05, 0.12, "square")),
-  magIn: () => (burst(900, 0.06, 0.45, 2, "bandpass"), tone(260, 180, 0.06, 0.2, "square"), void setTimeout(() => burst(3000, 0.03, 0.2, 4, "bandpass"), 45)),
+  magOut: () => (puff(1600, 0.05, 0.32, 3, "bandpass", 1100), knock(260, 170, 0.04, 0.16)),
+  magIn: () => (puff(950, 0.06, 0.45, 2, "bandpass", 600), knock(200, 110, 0.06, 0.3), puff(3000, 0.03, 0.2, 4, "bandpass", 2400, 0.002, 0.045)),
   rack: () => (burst(2600, 0.05, 0.35, 4, "bandpass"), void setTimeout(() => burst(1900, 0.06, 0.4, 3, "bandpass"), 90)),
   swap: () => (burst(2000, 0.04, 0.2, 3, "bandpass"), void setTimeout(() => burst(3200, 0.03, 0.16, 4, "bandpass"), 70)),
-  headshot: () => (tone(1900, 2500, 0.08, 0.22, "square"), void setTimeout(() => tone(2500, 3100, 0.1, 0.18, "square"), 60)),
+  /** In the mask: a hard crack on plastic, then the splat. */
+  headshot: () => (puff(4200, 0.028, 0.7, 2.2, "bandpass", 2400), puff(1500, 0.05, 0.5, 7, "bandpass", 1150, 0.002, 0.004), puff(1900, 0.13, 0.65, 1, "lowpass", 280, 0.003, 0.014), knock(320, 105, 0.1, 0.65)),
+  /** A wheel's pointer passing a peg. */
+  clack: () => (puff(2400, 0.02, 0.32, 6, "bandpass", 1700), knock(320, 210, 0.025, 0.2)),
   click: () => tone(880, 660, 0.04, 0.12, "triangle"),
   back: () => tone(520, 390, 0.05, 0.12, "triangle"),
   coins: () => [1320, 1760, 2100].forEach((f, i) => setTimeout(() => tone(f, f * 1.01, 0.09, 0.12, "triangle"), i * 55)),
@@ -389,12 +461,13 @@ export const sfx = {
   stab: () => (burst(500, 0.12, 0.8, 0.8), tone(260, 80, 0.12, 0.45, "sawtooth"), burst(3200, 0.05, 0.3, 2, "bandpass")),
   clank: () => (tone(2400, 1500, 0.09, 0.25, "square"), tone(3700, 2900, 0.14, 0.14, "triangle"), burst(4200, 0.05, 0.25, 3, "bandpass")),
   flick: () => (tone(3000, 4200, 0.05, 0.08, "triangle"), burst(5200, 0.04, 0.1, 3, "bandpass")),
-  bounce: (volume = 1) => (tone(900, 500, 0.04, 0.18 * volume, "triangle"), burst(2500, 0.03, 0.12 * volume, 3, "bandpass")),
+  bounce: (volume = 1) => (puff(1700, 0.045, 0.3 * volume, 7, "bandpass", 1200), knock(280, 150, 0.04, 0.22 * volume)),
   /** Grenades going off: a wet pop, a hiss of foam, a whoosh of fire. */
   splatBang: (volume = 1) => (burst(1200, 0.25, 0.9 * volume, 0.7), tone(700, 120, 0.2, 0.4 * volume, "sawtooth"), tone(2600, 2600, 0.9, 0.05 * volume, "sine")),
   foam: (volume = 1) => (burst(5200, 1.4, 0.3 * volume, 0.6, "highpass"), tone(300, 520, 0.4, 0.1 * volume, "sine")),
   ignite: (volume = 1) => (burst(500, 0.6, 0.7 * volume, 0.5), tone(140, 60, 0.4, 0.4 * volume, "sawtooth")),
-  target: (pitch = 1) => tone(1400 * pitch, 1400 * pitch, 0.12, 0.16, "triangle"),
+  /** A range target taking a hit: a dull knock on a plate. */
+  target: (pitch = 1) => (puff(1250 * pitch, 0.09, 0.55, 8, "bandpass", 1050 * pitch), puff(2800, 0.02, 0.2, 1.5, "bandpass", 1800), knock(250 * pitch, 150, 0.06, 0.35)),
   chop: () => burst(900, 0.12, 0.5, 2, "bandpass"),
   step: () => burst(420, 0.07, 0.07),
   growl: () => tone(110, 70, 0.35, 0.3, "sawtooth"),

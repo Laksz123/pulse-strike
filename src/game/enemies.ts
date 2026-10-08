@@ -5,7 +5,7 @@
  * run, boars that charge when crowded, and wolves, crocodiles and panthers that hunt.
  */
 
-import RAPIER from "@dimforge/rapier3d-compat";
+import { RAPIER } from "../physics";
 import * as THREE from "three";
 import { skillOf, useStore } from "../store";
 import { sfx } from "./audio";

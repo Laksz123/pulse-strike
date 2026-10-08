@@ -1,6 +1,6 @@
 /** Rendering helpers for the menus: studio lighting, weapon and agent icons, map previews and the turntable. */
 
-import RAPIER from "@dimforge/rapier3d-compat";
+import { RAPIER, loadPhysics } from "../physics";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { buildMap, type MapId } from "./map";
@@ -134,7 +134,7 @@ export function mapThumb(id: MapId): Promise<string> {
   let job = thumbs.get(id);
   if (!job) {
     job = (async () => {
-      await RAPIER.init();
+      await loadPhysics();
       // Let the menu paint first, and the textures arrive.
       await new Promise((done) => setTimeout(done, 350));
       const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
