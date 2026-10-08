@@ -1524,3 +1524,71 @@ a.bp-owned { cursor: pointer; }
 .gw-won .gw-spin { align-self: stretch; }
 .h700 .gw-card { padding: 16px 26px 16px 22px; gap: 26px; transform: scale(0.9); }
 .a-loose { position: fixed; left: 50%; top: 64px; transform: translateX(-50%); z-index: 40; max-width: min(640px, 86vw); padding: 8px 14px; border-radius: 12px; background: rgba(11, 16, 34, 0.9); border: 3px solid #ffb81a; color: #fff; font-size: 13px; font-weight: 800; line-height: 1.3; text-align: center; pointer-events: none; }
+
+/* Who is playing: the gate before the lobby, and the account in the lobby's menu. */
+.ac { position: absolute; inset: 0; z-index: 70; display: grid; place-items: center; background: rgba(8, 12, 28, 0.82); backdrop-filter: blur(7px); animation: gw-in 0.25s ease-out; }
+.ac-card { width: 880px; display: flex; flex-direction: column; gap: 14px; padding: 22px 30px 18px; color: #fff; background: radial-gradient(120% 100% at 30% 30%, #2a3f9a 0%, #16204a 62%, #0f1736 100%); border: 5px solid var(--ink); border-radius: 34px; box-shadow: 0 10px 0 rgba(11, 16, 34, 0.6), inset 0 4px 0 rgba(255, 255, 255, 0.18); animation: gw-pop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1); }
+.ac-head { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.ac-head small { font-size: 13px; font-weight: 1000; letter-spacing: 0.14em; text-transform: uppercase; color: var(--yellow); }
+.ac-head h2 { margin: 0; font-size: 40px; }
+.ac-cols { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: stretch; gap: 18px; }
+.ac-guest, .ac-own { display: flex; flex-direction: column; padding: 16px 18px 18px; border-radius: 24px; background: rgba(11, 16, 34, 0.55); border: 4px solid var(--ink); box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.08); }
+.ac-guest { align-items: center; text-align: center; gap: 4px; }
+.ac-face { position: relative; width: 190px; height: 122px; overflow: hidden; margin-top: -4px; }
+.ac-face img { position: absolute; left: 50%; top: 50%; width: 300px; height: 300px; margin: -150px; object-fit: contain; filter: drop-shadow(0 5px 0 rgba(11, 16, 34, 0.45)); }
+.ac-title { font-size: 22px; font-weight: 1000; }
+.ac-guest p, .ac-form p { margin: 0; font-size: 14px; font-weight: 700; line-height: 1.35; color: #c9d3ee; }
+.ac-form p b { color: #fff; }
+.ac-or { align-self: center; font-style: normal; font-size: 13px; font-weight: 1000; letter-spacing: 0.1em; text-transform: uppercase; color: #8e9bc4; }
+.ac-go, .ac-submit { font: inherit; cursor: pointer; color: #fff; border: 5px solid var(--ink); border-bottom-width: 9px; border-radius: 20px; box-shadow: 0 6px 0 rgba(11, 16, 34, 0.5); transition: transform 0.08s, filter 0.08s; }
+.ac-go { margin-top: auto; align-self: stretch; padding: 10px 16px 12px; background: linear-gradient(#ffe45c, var(--yellow) 45%, var(--yellow-lo)); }
+.ac-go b { font-size: 30px; }
+.ac-submit { padding: 8px 16px 10px; background: linear-gradient(#7fe0ff, #2aa8f2 45%, #1b7fd6); }
+.ac-submit b { font-size: 22px; -webkit-text-stroke-width: 4px; }
+.ac-go:hover:not(:disabled), .ac-submit:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.07); }
+.ac-go:active:not(:disabled), .ac-submit:active:not(:disabled) { transform: translateY(4px); }
+.ac-go:disabled, .ac-submit:disabled { filter: saturate(0.4) brightness(0.85); cursor: default; }
+.ac-form { display: flex; flex-direction: column; gap: 10px; height: 100%; }
+.ac-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 4px; border-radius: 16px; background: var(--ink); }
+.ac-tabs button { font: inherit; font-size: 15px; font-weight: 1000; cursor: pointer; color: #9fb0dc; background: none; border: 0; border-radius: 12px; padding: 7px 0; }
+.ac-tabs button.on { color: var(--ink); background: #fff; }
+.ac-form input, .ac-nick input { font: inherit; font-size: 16px; font-weight: 800; color: #fff; user-select: text; -webkit-user-select: text; background: var(--ink); border: 3px solid #33437c; border-radius: 14px; padding: 10px 14px; outline: none; min-width: 0; }
+.ac-form input::placeholder { color: #6f7ca6; }
+.ac-form input:focus, .ac-nick input:focus { border-color: var(--yellow); }
+.ac-form .ac-code { font-size: 30px; font-weight: 1000; letter-spacing: 0.3em; text-align: center; padding: 8px 0 8px 0.3em; }
+.ac-sso { font: inherit; font-size: 14px; font-weight: 900; cursor: pointer; color: #fff; background: linear-gradient(var(--tile-hi), var(--tile-lo)); border: 3px solid var(--ink); border-radius: 14px; padding: 8px 12px; margin-top: auto; }
+.ac-sso:hover:not(:disabled) { filter: brightness(1.15); }
+.ac-links { display: flex; justify-content: space-between; gap: 10px; margin-top: auto; }
+.ac-links button { font: inherit; font-size: 13px; font-weight: 800; cursor: pointer; color: #9fd0ff; background: none; border: 0; padding: 2px 0; }
+.ac-links button:hover:not(:disabled) { color: #fff; }
+.ac-links button:disabled { color: #7d8ab3; cursor: default; }
+.ac-error { padding: 8px 14px; border-radius: 14px; font-size: 14px; font-weight: 800; text-align: center; color: #fff; background: #b3263a; border: 3px solid var(--ink); }
+.ac-wallet { display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 12px; border-radius: 16px; background: rgba(11, 16, 34, 0.55); border: 3px solid var(--ink); }
+.ac-wallet > i { flex: none; width: 26px; height: 26px; border-radius: 8px; background: linear-gradient(135deg, #9945ff, #14f195); border: 2px solid var(--ink); }
+.ac-wallet span { display: flex; flex-direction: column; min-width: 0; margin-right: auto; line-height: 1.2; }
+.ac-wallet span b { font-size: 14px; font-weight: 1000; }
+.ac-wallet span small { font-size: 12px; font-weight: 700; color: #aab6d6; }
+.ac-wallet button { font: inherit; font-size: 13px; font-weight: 900; cursor: pointer; color: #fff; white-space: nowrap; background: linear-gradient(var(--tile-hi), var(--tile-lo)); border: 3px solid var(--ink); border-radius: 12px; padding: 6px 12px; }
+.ac-wallet button.sol { background: linear-gradient(135deg, #9945ff, #14f195); }
+.ac-wallet button:hover:not(:disabled) { filter: brightness(1.15); }
+.ac-wallet button:disabled { filter: saturate(0.3) brightness(0.8); cursor: default; }
+.ac-wallet.on > i { box-shadow: 0 0 0 3px rgba(20, 241, 149, 0.35); }
+.ac-foot { text-align: center; font-size: 12px; font-weight: 700; color: #8e9bc4; }
+.h700 .ac-card { transform: scale(0.94); }
+
+.ac-panel { display: flex; flex-direction: column; gap: 8px; padding-bottom: 12px; border-bottom: 3px solid rgba(255, 255, 255, 0.1); }
+.ac-me { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 1px; }
+.ac-me i { grid-row: span 2; font-style: normal; font-size: 11px; font-weight: 1000; letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 8px; border-radius: 9px; color: var(--ink); background: #c9d3ee; }
+.ac-me i.email { background: var(--lime); }
+.ac-me i.idos { background: var(--yellow); }
+.ac-me b { font-size: 17px; font-weight: 1000; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ac-me small { font-size: 12px; font-weight: 700; color: #8e9bc4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ac-line { font: inherit; font-size: 14px; font-weight: 900; cursor: pointer; color: #fff; background: linear-gradient(var(--tile-hi), var(--tile-lo)); border: 3px solid var(--ink); border-radius: 12px; padding: 7px 12px; }
+.ac-line.go { color: var(--ink); background: linear-gradient(#ffe45c, var(--yellow) 45%, var(--yellow-lo)); }
+.ac-line:hover { filter: brightness(1.12); }
+.ac-nick { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+.ac-nick input { font-size: 14px; padding: 6px 10px; border-radius: 12px; }
+.ac-nick button { font: inherit; font-size: 14px; font-weight: 1000; cursor: pointer; color: var(--ink); background: var(--yellow); border: 3px solid var(--ink); border-radius: 12px; padding: 0 12px; }
+.ac-note { font-size: 12px; font-weight: 800; color: #ff9aa8; }
+.ac-panel .ac-wallet { flex-wrap: wrap; padding: 8px; gap: 6px 8px; }
+.ac-panel .ac-wallet button { flex: 1; padding: 5px 8px; }

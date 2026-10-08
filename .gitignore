@@ -8,3 +8,13 @@ test-ledger
 .keys
 .vercel
 .env*
+
+# Pitch video: captured footage and renders
+pitch/frames
+pitch/clips
+pitch/out
+pitch/*.mp4
+pitch/stills
+pitch/vo
+dist-idos
+idos-build.zip

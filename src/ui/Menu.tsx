@@ -12,6 +12,8 @@ import { MISSION_BY_ID, PASS_FREE, PASS_PREMIUM, SEASON, passLevel, passProgress
 import { mapThumb } from "../arena/render";
 import { short } from "../solana/chain";
 import { useWallet } from "../solana/wallet";
+import { useAccount } from "../idos";
+import { AccountGate, AccountPanel } from "./Account";
 import { Arsenal } from "./Arsenal";
 import { Cases } from "./Cases";
 import { Gift } from "./Gift";
@@ -142,6 +144,8 @@ function MatchPicker({ thumbs, onClose }: { thumbs: Partial<Record<MapId, string
 /** The lobby: the agent in the middle, everything else around the edges, one big button to play. */
 function Lobby({ go }: { go(p: Page): void }) {
   const s = useStore();
+  const name = useAccount((a) => a.name);
+  const signedIn = useAccount((a) => a.status === "in");
   const canvas = useRef<HTMLDivElement>(null);
   const scene = useRef<LobbyScene | null>(null);
   const [thumbs, setThumbs] = useState<Partial<Record<MapId, string>>>({});
@@ -183,10 +187,14 @@ function Lobby({ go }: { go(p: Page): void }) {
       gone = true;
     };
   }, []);
+  // Signing out shuts the menu it was done from.
+  useEffect(() => {
+    if (!signedIn) setMenu(false);
+  }, [signedIn]);
   // Every button has a key.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.repeat || e.metaKey || e.ctrlKey || (e.target as HTMLElement).tagName === "INPUT") return;
+      if (e.repeat || e.metaKey || e.ctrlKey || (e.target as HTMLElement).tagName === "INPUT" || useAccount.getState().status !== "in") return;
       if (e.code === "Escape") return picker ? setPicker(false) : setMenu(false);
       if (picker) return;
       if (e.code === "Enter" || e.code === "Space") return s.setScreen("arena");
@@ -205,7 +213,7 @@ function Lobby({ go }: { go(p: Page): void }) {
       <div className="ps-profile">
         <div className="ps-shield"><b className="toon">{level}</b></div>
         <div className="ps-who">
-          <b className="toon">PULSE STRIKE</b>
+          <b className="toon">{name || "PULSE STRIKE"}</b>
           <div className="ps-xp"><div style={{ width: `${levelProgress(s.xp) * 100}%` }} /><span>{s.xp - lo} / {hi - lo} XP</span></div>
         </div>
       </div>
@@ -216,6 +224,7 @@ function Lobby({ go }: { go(p: Page): void }) {
         <button className="ps-burger" onClick={() => setMenu((m) => !m)} aria-label="Меню"><i /><i /><i /></button>
         {menu && (
           <div className="ps-drop">
+            <AccountPanel />
             <label>
               Чувствительность мыши <b>{s.settings.sens.toFixed(1)}</b>
               <input type="range" min="0.3" max="3" step="0.1" value={s.settings.sens} onChange={(e) => s.setSettings({ sens: Number(e.target.value) })} />
@@ -294,6 +303,7 @@ function Lobby({ go }: { go(p: Page): void }) {
 
 export function Menu() {
   const s = useStore();
+  const signedIn = useAccount((a) => a.status === "in");
   const [mode, setMode] = useState<Mode>("shooter");
   const [page, setPage] = useState<Page>("play");
   const level = levelOf(s.xp);
@@ -341,7 +351,7 @@ export function Menu() {
   const ready = s.contracts.filter((c) => c.progress > 0).length;
 
   if (mode === "shooter") {
-    if (page === "play") return <div className="menu paint ps home"><Lobby go={open} /><Gift /></div>;
+    if (page === "play") return <div className="menu paint ps home"><Lobby go={open} /><AccountGate />{signedIn && <Gift />}</div>;
     return (
       <div className="menu paint ps" data-page={page}>
         <div className="menu-sky" />

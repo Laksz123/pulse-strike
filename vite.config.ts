@@ -1,8 +1,22 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 
-export default defineConfig({
-  plugins: [react()],
+/**
+ * A build for hosts that serve the game from a folder of their own (`vite build --mode idos`): the
+ * art is asked for by paths that start at the site's root, and there they have to start at the page.
+ */
+const artFromHere: Plugin = {
+  name: "art-from-here",
+  enforce: "pre",
+  transform(code, id) {
+    if (!/\/src\/.*\.tsx?$/.test(id) || !code.includes("/art/")) return null;
+    return code.replace(/(["'`])\/art\//g, "$1./art/");
+  },
+};
+
+export default defineConfig(({ mode }) => ({
+  base: mode === "idos" ? "./" : "/",
+  plugins: mode === "idos" ? [artFromHere, react()] : [react()],
   server: { port: 5183 },
   build: {
     // The engine, the physics and the Solana client change far less often than the game. Each goes in
@@ -21,4 +35,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));
