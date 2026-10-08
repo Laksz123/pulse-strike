@@ -312,8 +312,8 @@ export function summit(k: Kit): MapSpec {
 
   k.prop(P.truck(0xd2584a, 0xf2ead8), -32, 16.6, 0.02, [3.8, 1.7, 1.25]);
   k.box(-33.1, 16.6, 5.2, 0.18, 2.3, white, { y: 3.3, yaw: 0.02, solid: false });
-  k.crate(-28.9, 3.3, 1.6, 0.1);
-  k.crate(-29, 4.9, 1.0, 0.5);
+  k.crate(-28.9, 13.8, 1.6, 0.1);
+  k.crate(-29, 12.4, 1.0, 0.5);
   k.prop(P.pine(6.2), -35, 3.2, 2, 0.35);
   k.prop(P.skiRack(), -35.6, 9.5, Math.PI / 2, [0.9, 0.9, 0.2]);
   door(-36, 12.4, "e", "shop");

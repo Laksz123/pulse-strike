@@ -5,6 +5,9 @@ import { markerIcon } from "./arena/render";
 import { App } from "./ui/App";
 import "./styles.css";
 import { useStore } from "./store";
+import { fitUi } from "./device";
+
+fitUi();
 
 // Handy in the console while developing.
 if (import.meta.env.DEV) {

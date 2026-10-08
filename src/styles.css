@@ -72,7 +72,7 @@ kbd {
 .home { grid-area: main; display: flex; justify-content: space-between; align-items: flex-end; gap: 32px; min-width: 0; }
 .hero { max-width: 520px; }
 .kicker { font-size: 13px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink); font-weight: 700; }
-.hero h1 { font-size: clamp(48px, 7vw, 96px); line-height: 0.95; font-weight: 800; text-transform: uppercase; margin: 10px 0 16px; text-shadow: 0 3px 0 rgba(20, 17, 13, 0.35); }
+.hero h1 { font-size: clamp(48px, calc(7 * var(--vw)), 96px); line-height: 0.95; font-weight: 800; text-transform: uppercase; margin: 10px 0 16px; text-shadow: 0 3px 0 rgba(20, 17, 13, 0.35); }
 .lead { font-size: 18px; line-height: 1.45; max-width: 440px; text-shadow: 0 1px 2px rgba(20, 17, 13, 0.6); }
 .loadout { margin-top: 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; display: inline-flex; flex-direction: column; gap: 8px; }
 .loadout-title { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
@@ -251,7 +251,7 @@ kbd {
 
 .minimap { position: absolute; right: 18px; top: 16px; width: 176px; height: 176px; border-radius: 50%; border: 3px solid rgba(20, 17, 13, 0.85); box-shadow: 0 0 0 1px rgba(233, 225, 207, 0.25), 0 4px 14px rgba(0, 0, 0, 0.4); image-rendering: pixelated; }
 .mapview { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 8px; max-height: 100%; }
-.mapview canvas { width: min(660px, 76vh); height: min(660px, 76vh); image-rendering: pixelated; border-radius: 3px; }
+.mapview canvas { width: min(660px, calc(76 * var(--vh))); height: min(660px, calc(76 * var(--vh))); image-rendering: pixelated; border-radius: 3px; }
 .map-head b { color: var(--bone); }
 .map-foot { font-size: 12px; color: var(--dim); }
 .map-head { display: flex; align-items: center; gap: 14px; font-size: 13px; color: var(--dim); }
@@ -361,8 +361,8 @@ kbd {
 .a-clock b { font-size: 26px; font-weight: 800; line-height: 1; }
 .a-clock small { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
 .a-cross { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px; background: linear-gradient(#fff, #fff) center / 2px 100% no-repeat, linear-gradient(#fff, #fff) center / 100% 2px no-repeat; -webkit-mask: radial-gradient(circle, transparent 4px, #000 4.5px); mask: radial-gradient(circle, transparent 4px, #000 4.5px); filter: drop-shadow(0 0 1px #000); }
-.a-scope { position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, transparent 0 34vh, #000 34.3vh); }
-.a-scope::after { content: ""; position: absolute; inset: 0; background: linear-gradient(#000, #000) center / 1px 68vh no-repeat, linear-gradient(#000, #000) center / 68vh 1px no-repeat; }
+.a-scope { position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, transparent 0 calc(34 * var(--vh)), #000 calc(34.3 * var(--vh))); }
+.a-scope::after { content: ""; position: absolute; inset: 0; background: linear-gradient(#000, #000) center / 1px calc(68 * var(--vh)) no-repeat, linear-gradient(#000, #000) center / calc(68 * var(--vh)) 1px no-repeat; }
 .a-charge { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px; border-radius: 50%; -webkit-mask: radial-gradient(circle, transparent 18px, #000 18.5px); mask: radial-gradient(circle, transparent 18px, #000 18.5px); opacity: 0.9; }
 .a-tag { position: absolute; left: 50%; top: 40%; transform: translateX(-50%); font-size: 30px; font-weight: 800; letter-spacing: 0.12em; color: #ffd24a; animation: tagpop 0.26s ease-out; text-align: center; }
 .a-tag small { display: block; font-size: 13px; letter-spacing: 0.2em; color: #fff; }
@@ -403,17 +403,17 @@ kbd {
 .a-row.you { background: rgba(255, 210, 74, 0.18); border-radius: 4px; font-weight: 700; }
 .a-row b { font-size: 16px; }
 
-@media (max-width: 1100px) {
-  .arsenal { grid-template-columns: 1fr; overflow: auto; }
-  .inventory { grid-template-columns: 200px auto; overflow: auto; }
-  .inv-side { grid-column: 1 / -1; }
-}
-@media (max-width: 900px) {
-  .menu { grid-template: "top" auto "side" auto "main" 1fr / 1fr; padding: 16px; gap: 16px; overflow: auto; }
-  .side { flex-direction: row; flex-wrap: wrap; }
-  .home { flex-direction: column; align-items: stretch; }
-  .play { width: 100%; }
-}
+/* On a sheet no more than 1100 wide: the class is set from the fitted size, not the real one. */
+.w1100 .arsenal { grid-template-columns: 1fr; overflow: auto; }
+.w1100 .inventory { grid-template-columns: 200px auto; overflow: auto; }
+.w1100 .inv-side { grid-column: 1 / -1; }
+
+/* On a sheet no more than 900 wide: the class is set from the fitted size, not the real one. */
+.w900 .menu { grid-template: "top" auto "side" auto "main" 1fr / 1fr; padding: 16px; gap: 16px; overflow: auto; }
+.w900 .side { flex-direction: row; flex-wrap: wrap; }
+.w900 .home { flex-direction: column; align-items: stretch; }
+.w900 .play { width: 100%; }
+
 
 /* ------------------------------------------------------------------ Paintball look
    One visual language for the whole paintball mode: generated key art behind, navy glass panels,
@@ -685,7 +685,7 @@ a.p-owned:hover { text-decoration: underline; }
 .a-mark b i { font-style: normal; transform: rotate(-45deg); }
 .a-mark.bomb b { background: #ff3b30; color: #fff; font-size: 9px; width: 40px; height: 40px; animation: bombpulse 0.5s ease-in-out infinite alternate; }
 .a-mark small { margin-top: 10px; font-size: 11px; font-weight: 800; }
-.a-banner { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); background: var(--panel); border: 2px solid var(--line); border-radius: 16px; padding: 10px 30px; display: flex; flex-direction: column; align-items: center; gap: 2px; animation: pop 0.2s ease-out; max-width: 80vw; text-align: center; }
+.a-banner { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); background: var(--panel); border: 2px solid var(--line); border-radius: 16px; padding: 10px 30px; display: flex; flex-direction: column; align-items: center; gap: 2px; animation: pop 0.2s ease-out; max-width: calc(80 * var(--vw)); text-align: center; }
 .a-banner b { font-size: 34px; font-weight: 900; font-style: italic; letter-spacing: 0.04em; }
 .a-banner span { font-size: 14px; color: #dfe6ff; font-weight: 600; }
 .a-banner.t1 { border-color: #8be830; }
@@ -711,7 +711,7 @@ a.p-owned:hover { text-decoration: underline; }
 .a-row.out { opacity: 0.45; }
 .a-final { margin: 0; font-size: 44px; font-weight: 900; text-align: center; line-height: 1; }
 .a-buy-wrap { background: rgba(8, 12, 28, 0.6); }
-.a-buy { width: min(1180px, 96vw); max-height: 92vh; overflow: auto; background: var(--panel); border: 2px solid var(--line); border-radius: 18px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; text-shadow: none; backdrop-filter: blur(10px); }
+.a-buy { width: min(1180px, calc(96 * var(--vw))); max-height: calc(92 * var(--vh)); overflow: auto; background: var(--panel); border: 2px solid var(--line); border-radius: 18px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; text-shadow: none; backdrop-filter: blur(10px); }
 .a-buy-head { display: flex; align-items: center; gap: 14px; }
 .a-buy-head h2 { margin: 0; font-size: 26px; font-weight: 900; font-style: italic; }
 .a-buy-money { font-size: 24px; font-weight: 900; color: #8be830; }
@@ -732,12 +732,12 @@ a.p-owned:hover { text-decoration: underline; }
 .a-buy-tip span { font-size: 14px; }
 .a-buy-tip small { font-size: 12px; color: var(--dim); }
 
-@media (max-width: 1150px) {
-  .lobby { grid-template-columns: minmax(0, 1fr); overflow: auto; }
-  .lobby-agent { height: 300px; flex-shrink: 0; }
-  .market, .p-about { grid-template-columns: minmax(0, 1fr); overflow: auto; }
-  .a-buy-cols { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
+/* On a sheet no more than 1150 wide: the class is set from the fitted size, not the real one. */
+.w1150 .lobby { grid-template-columns: minmax(0, 1fr); overflow: auto; }
+.w1150 .lobby-agent { height: 300px; flex-shrink: 0; }
+.w1150 .market, .w1150 .p-about { grid-template-columns: minmax(0, 1fr); overflow: auto; }
+.w1150 .a-buy-cols { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
 
 /* ------------------------------------------------------------------ Cartoon kit
    The lobby and everything in the shooter's menus. One rule set: heavy rounded type with a dark
@@ -809,7 +809,7 @@ button.ps-pill { cursor: pointer; }
 .ps-agent b { font-size: 24px; }
 .ps-agent:hover { border-color: #fff; }
 
-.ps-passbar { position: absolute; left: 22px; bottom: 22px; width: min(500px, calc(100vw - 800px)); height: 84px; font: inherit; color: #fff; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 12px; padding: 0 14px 0 8px; background: rgba(11, 16, 34, 0.9); border: 4px solid var(--ink); border-radius: 22px; box-shadow: 0 7px 0 rgba(11, 16, 34, 0.6); transition: transform 0.08s; }
+.ps-passbar { position: absolute; left: 22px; bottom: 22px; width: min(500px, calc(calc(100 * var(--vw)) - 800px)); height: 84px; font: inherit; color: #fff; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 12px; padding: 0 14px 0 8px; background: rgba(11, 16, 34, 0.9); border: 4px solid var(--ink); border-radius: 22px; box-shadow: 0 7px 0 rgba(11, 16, 34, 0.6); transition: transform 0.08s; }
 .ps-passbar:hover { transform: translateY(-2px); border-color: var(--yellow); }
 .ps-passbar-icon { width: 66px; height: 66px; object-fit: contain; filter: drop-shadow(0 4px 0 rgba(11, 16, 34, 0.5)); }
 .ps-passbar-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
@@ -884,24 +884,24 @@ button.ps-pill { cursor: pointer; }
 .a-side, .a-hud .a-clock, .a-hp, .a-armor, .a-money, .a-hud .a-ammo, .a-banner, .a-dead, .a-hint, .a-action, .a-buy { border: 3px solid #0b1022 !important; box-shadow: 0 4px 0 rgba(11, 16, 34, 0.55); }
 .a-hud .a-clock.bomb { border-color: #ff3b30 !important; }
 
-@media (max-width: 1180px) {
-  .ps-tiles { grid-template-columns: repeat(2, 92px); gap: 14px 10px; top: 108px; }
-  .ps-tile { width: 92px; height: 92px; border-radius: 18px; }
-  .ps-tile img { width: 62px; height: 62px; margin-left: -31px; }
-  .ps-tile span { font-size: 13px; -webkit-text-stroke-width: 4px; }
-  .ps-match, .ps-cta { width: 310px; }
-  .ps-cta b { font-size: 46px; }
-  .ps-xp { width: 180px; }
-  .ps-passbar { width: min(440px, calc(100vw - 640px)); }
-  .ps-passbar-next { display: none; }
-}
-@media (max-height: 700px) {
-  .ps-tiles { top: 98px; gap: 12px 10px; grid-template-columns: repeat(2, 88px); }
-  .ps-tile { width: 88px; height: 88px; }
-  .ps-tile img { width: 58px; height: 58px; margin-left: -29px; }
-  .ps-match-body { height: 96px; }
-  .ps-cta { height: 96px; }
-}
+/* On a sheet no more than 1180 wide: the class is set from the fitted size, not the real one. */
+.w1180 .ps-tiles { grid-template-columns: repeat(2, 92px); gap: 14px 10px; top: 108px; }
+.w1180 .ps-tile { width: 92px; height: 92px; border-radius: 18px; }
+.w1180 .ps-tile img { width: 62px; height: 62px; margin-left: -31px; }
+.w1180 .ps-tile span { font-size: 13px; -webkit-text-stroke-width: 4px; }
+.w1180 .ps-match, .w1180 .ps-cta { width: 310px; }
+.w1180 .ps-cta b { font-size: 46px; }
+.w1180 .ps-xp { width: 180px; }
+.w1180 .ps-passbar { width: min(440px, calc(calc(100 * var(--vw)) - 640px)); }
+.w1180 .ps-passbar-next { display: none; }
+
+/* On a sheet no more than 700 tall: the class is set from the fitted size, not the real one. */
+.h700 .ps-tiles { top: 98px; gap: 12px 10px; grid-template-columns: repeat(2, 88px); }
+.h700 .ps-tile { width: 88px; height: 88px; }
+.h700 .ps-tile img { width: 58px; height: 58px; margin-left: -29px; }
+.h700 .ps-match-body { height: 96px; }
+.h700 .ps-cta { height: 96px; }
+
 
 /* The shop: rows of big cards, each with one thing and its price. */
 .shop { grid-area: main; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 18px; padding: 4px 4px 12px; }
@@ -945,7 +945,7 @@ button.ps-pill { cursor: pointer; }
 .a-blind i::before { left: 22%; }
 .a-blind i::after { left: 61%; height: 105%; width: 11%; }
 @keyframes blind { 0%, 45% { opacity: 1; } 100% { opacity: 0; } }
-@keyframes drip { to { margin-top: 9vh; } }
+@keyframes drip { to { margin-top: calc(9 * var(--vh)); } }
 .a-dmg { position: absolute; font-size: 24px; font-weight: 1000; color: #fff; -webkit-text-stroke: 4px #0b1022; paint-order: stroke fill; animation: dmg 0.9s ease-out forwards; pointer-events: none; }
 .a-dmg.head { color: #ffd21a; font-size: 30px; }
 .a-dmg.kill { color: #ff5a4a; }
@@ -1159,13 +1159,13 @@ button.ps-pill { cursor: pointer; }
 .menu.ps .s-card em { color: #fff; opacity: 0.85; }
 .s-row { grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); }
 
-@media (max-width: 1100px) {
-  .inv { grid-template-columns: minmax(0, 1fr); overflow: auto; }
-  .inv-view { min-height: 520px; }
-  .s-hero { grid-template-columns: 1fr; }
-  .t-body { grid-template-columns: 1fr; }
-  .mkt-how { grid-template-columns: 1fr; }
-}
+/* On a sheet no more than 1100 wide: the class is set from the fitted size, not the real one. */
+.w1100 .inv { grid-template-columns: minmax(0, 1fr); overflow: auto; }
+.w1100 .inv-view { min-height: 520px; }
+.w1100 .s-hero { grid-template-columns: 1fr; }
+.w1100 .t-body { grid-template-columns: 1fr; }
+.w1100 .mkt-how { grid-template-columns: 1fr; }
+
 /* Cards clip their own corners, so a grid may not squeeze them: rows are as tall as their cards. */
 .menu.ps .m-grid, .mkt-grid { grid-auto-rows: max-content; }
 .menu.ps .m-card { min-height: max-content; flex-shrink: 0; }
@@ -1197,3 +1197,56 @@ button.ps-pill { cursor: pointer; }
 .a-teams-foot span kbd { min-width: 24px; height: 24px; font-size: 12px; border-width: 2px; }
 .a-team-auto { display: flex; align-items: center; gap: 10px; font: inherit; font-size: 18px; font-weight: 1000; text-transform: uppercase; color: var(--ink); background: #fff; border: 4px solid var(--ink); border-radius: 16px; padding: 9px 24px 9px 12px; box-shadow: 0 5px 0 rgba(11, 16, 34, 0.6); cursor: pointer; }
 .a-team-auto:hover { background: var(--yellow); }
+
+/* --- Any screen: laid out on a sheet at least 620 tall, and shrunk to fit a smaller one --- */
+:root { --ui: 1; --vw: calc(1vw / var(--ui)); --vh: calc(1vh / var(--ui)); }
+html, body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
+.menu, .hud {
+  position: fixed; inset: auto; left: env(safe-area-inset-left, 0px); top: 0;
+  width: calc((100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) / var(--ui));
+  height: calc(100vh / var(--ui)); height: calc(100dvh / var(--ui));
+  transform: scale(var(--ui)); transform-origin: 0 0;
+}
+.game { touch-action: none; }
+
+/* A phone held upright. */
+.turn { display: none; position: fixed; inset: 0; z-index: 100; background: #0b1022; color: #fff; place-items: center; align-content: center; gap: 12px; text-align: center; font-family: "Nunito", "Rubik", sans-serif; padding: 24px; }
+.upright .turn { display: grid; }
+.turn svg { width: 104px; height: 104px; color: #ffd21a; animation: turn 2.2s ease-in-out infinite; }
+@keyframes turn { 0%, 25% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
+.turn b { font-size: 28px; font-weight: 1000; text-transform: uppercase; }
+.turn span { font-size: 15px; color: #aab6d6; }
+
+/* --- Touch controls --- */
+.t-pad { position: absolute; inset: 0; z-index: 1; pointer-events: auto; touch-action: none; }
+.t-stick { position: absolute; left: 150px; bottom: 150px; width: 0; height: 0; opacity: 0.45; pointer-events: none; }
+.t-stick.on { bottom: auto; opacity: 1; }
+.t-stick::before { content: ""; position: absolute; left: -92px; top: -92px; width: 184px; height: 184px; border-radius: 50%; background: rgba(11, 16, 34, 0.34); border: 4px solid rgba(255, 255, 255, 0.4); }
+.t-stick i { position: absolute; left: -42px; top: -42px; width: 84px; height: 84px; border-radius: 50%; background: rgba(255, 255, 255, 0.88); border: 4px solid #0b1022; box-shadow: 0 5px 0 rgba(11, 16, 34, 0.45); }
+.t-btn { position: absolute; display: grid; place-items: center; padding: 0; border-radius: 50%; border: 4px solid #0b1022; color: #fff; background: rgba(11, 16, 34, 0.56); box-shadow: 0 5px 0 rgba(11, 16, 34, 0.45); font: inherit; font-size: 14px; font-weight: 1000; text-transform: uppercase; text-shadow: none; touch-action: none; -webkit-user-select: none; user-select: none; }
+.t-btn svg { width: 54%; height: 54%; pointer-events: none; }
+.t-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 rgba(11, 16, 34, 0.45); filter: brightness(1.25); }
+.t-btn.fire { right: 76px; bottom: 132px; width: 130px; height: 130px; background: linear-gradient(#ff8a4a, #e8362a); }
+.t-btn.aim { right: 228px; bottom: 92px; width: 88px; height: 88px; }
+.t-btn.aim.on { background: #ffd21a; color: #0b1022; }
+.t-btn.jump { right: 30px; bottom: 286px; width: 84px; height: 84px; }
+.t-btn.reload { right: 216px; bottom: 204px; width: 76px; height: 76px; }
+.t-btn.use { right: 132px; bottom: 302px; width: 96px; height: 96px; background: linear-gradient(#ffe14a, #ffab00); color: #0b1022; }
+.t-top { position: absolute; right: 16px; top: 12px; display: flex; gap: 8px; }
+.t-chip { height: 48px; padding: 0 16px; border-radius: 14px; border: 3px solid #0b1022; background: rgba(11, 16, 34, 0.72); color: #fff; font: inherit; font-size: 15px; font-weight: 1000; text-transform: uppercase; text-shadow: none; box-shadow: 0 4px 0 rgba(11, 16, 34, 0.45); touch-action: none; }
+.t-chip:active { transform: translateY(2px); filter: brightness(1.25); }
+.t-chip.buy { background: linear-gradient(#b4f55a, #5fc22a); color: #0b1022; }
+.t-chip.more { width: 52px; padding: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 4px; }
+.t-chip.more i { width: 22px; height: 3px; border-radius: 2px; background: #fff; }
+
+/* The match screen rearranged for thumbs: the corners belong to the stick and the buttons. */
+.touch .a-hud kbd, .touch .a-xp, .touch .a-slot span { display: none; }
+.touch .a-hud .a-feed { top: 70px; right: 16px; }
+.touch .a-vitals { left: 16px; top: 222px; bottom: auto; }
+.touch .a-hp, .touch .a-armor { min-width: 118px; }
+.touch .a-load { right: auto; left: 50%; bottom: 10px; transform: translateX(-50%); align-items: center; z-index: 2; }
+.touch .a-slots { pointer-events: auto; touch-action: none; }
+.touch .a-slot { width: 66px; height: 46px; }
+.touch .a-teams, .touch .overlay { z-index: 8; }
+.touch .menu kbd { display: none; }
+.menu { touch-action: manipulation; }

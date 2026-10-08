@@ -18,6 +18,7 @@ import { HIT_AT, HOLD, MOVE_TIME, drawTime, knifePose, type KnifeMove } from "./
 import { Grenades, NADES, NADE_ORDER, Puffs, type NadeKind } from "./grenades";
 import { buildMap, type ArenaMap, type MapId, type P2, type Site } from "./map";
 import { DEFAULT_KNIFE, DEFAULT_SIDE, GUNS, MARKER_BY_ID, PATTERNS, RARITY, itemRarity, type MarkerDef } from "./markers";
+import { LIGHT, TOUCH } from "../device";
 import { LEFT_FOREARM, bake, buildArms, buildMarker, pbr, type Arms, type MarkerModel } from "./models";
 import { DRAW_TIME, INSPECT_TIME, RELOAD_CUES, drawPose, inspectPose, kindOf, reloadPose, type GunPose } from "./viewmodel";
 import { Paint, type Actor } from "./paint";
@@ -708,7 +709,14 @@ export class Arena {
   private last = 0;
   private hudT = 0;
   private markT = 0;
-  private noLock = new URLSearchParams(location.search).has("nolock");
+  /** No mouse to capture: on a phone, or when asked for by the address, the match simply runs. */
+  private noLock = TOUCH || new URLSearchParams(location.search).has("nolock");
+  /** Touch: where the stick is pushed, whether the fire button is down, and whether the match is held on the pause screen. */
+  private stick = { x: 0, y: 0 };
+  private fireHeld = false;
+  private halted = false;
+  private autoT = 0;
+  private autoOn = false;
   private cleanup: (() => void)[] = [];
   private v = new THREE.Vector3();
   private v2 = new THREE.Vector3();
@@ -727,7 +735,7 @@ export class Arena {
     host.appendChild(this.canvas);
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, powerPreference: "high-performance" });
     this.renderer.autoClear = false;
-    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.enabled = !LIGHT;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     // Neutral tone mapping keeps the painted colours saturated.
     this.renderer.toneMapping = THREE.NeutralToneMapping;
@@ -2286,8 +2294,13 @@ export class Arena {
       this.swayX = Math.max(-0.035, Math.min(0.035, this.swayX - e.movementX * 0.00004));
       this.swayY = Math.max(-0.03, Math.min(0.03, this.swayY + e.movementY * 0.00004));
     });
+    // Sound may only start from a touch; some phones count the finger lifting, not landing.
+    on(window, "pointerdown" as keyof DocumentEventMap, () => sfx.unlock());
+    on(window, "touchend" as keyof DocumentEventMap, () => sfx.unlock());
     on(this.canvas, "mousedown", (e) => {
       sfx.unlock();
+      // Fingers have their own buttons; a tap that reaches the picture is not a shot.
+      if (TOUCH) return;
       if (!this.locked) return this.lock();
       if (e.button === 0) {
         this.trigger = true;
@@ -2322,6 +2335,10 @@ export class Arena {
   }
 
   lock(): void {
+    if (this.halted) {
+      this.halted = false;
+      useArena.setState({ paused: false });
+    }
     if (this.over || this.noLock) return;
     sfx.unlock();
     void Promise.resolve(this.canvas.requestPointerLock()).catch(() => {});
@@ -2333,7 +2350,7 @@ export class Arena {
   private resize(): void {
     const w = this.canvas.clientWidth || innerWidth;
     const h = this.canvas.clientHeight || innerHeight;
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, LIGHT ? 1.5 : 2));
     this.renderer.setSize(w, h, false);
     for (const cam of [this.camera, this.vmCamera]) {
       cam.aspect = w / h;
@@ -2360,10 +2377,98 @@ export class Arena {
       // Whatever is in the air keeps moving, paused or not.
       this.map.tick?.(dt, this.camera.position);
       if (this.picking && this.pickFirst) this.overview(now);
-      else if ((this.locked || this.buyOpen || this.picking) && !this.over) this.update(dt);
+      else if ((this.locked || this.buyOpen || this.picking) && !this.over && !this.halted) this.update(dt);
       this.render();
     };
     this.raf = requestAnimationFrame(frame);
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Touch: what the on-screen controls call.
+
+  /** The stick: how far it is pushed, -1..1 each way; up is forward. */
+  touchStick(x: number, y: number): void {
+    this.stick.x = x;
+    this.stick.y = y;
+  }
+
+  /** A finger dragged across the picture turns the view, by that many pixels. */
+  touchLook(dx: number, dy: number): void {
+    if (this.over || this.buyOpen || this.picking || this.halted || !this.me.alive) return;
+    const s = useStore.getState().settings;
+    const sens = 0.0058 * (s.touchSens ?? 1) * (this.camera.fov / BASE_FOV);
+    this.yaw -= dx * sens;
+    this.pitch = Math.max(-1.5, Math.min(1.5, this.pitch - dy * sens));
+    this.swayX = Math.max(-0.035, Math.min(0.035, this.swayX - dx * 0.00009));
+    this.swayY = Math.max(-0.03, Math.min(0.03, this.swayY + dy * 0.00009));
+  }
+
+  touchFire(down: boolean): void {
+    this.fireHeld = down;
+    this.trigger = down || this.autoOn;
+    if (down) this.pressed = true;
+  }
+
+  /** The aim button: holds the sights up until pressed again; with a blade, the heavy strike. */
+  touchAim(): void {
+    if (this.def()?.melee) this.altPressed = true;
+    else this.aiming = !this.aiming;
+  }
+
+  /** Holds the match on the pause screen; `lock` lets it go. */
+  pause(): void {
+    if (this.over || this.picking) return;
+    if (this.buyOpen) this.closeBuy(false);
+    this.halted = true;
+    this.keys.clear();
+    this.stick.x = this.stick.y = 0;
+    this.trigger = this.fireHeld = false;
+    useArena.setState({ paused: true });
+  }
+
+  /**
+   * Fires by itself while the sights are on an enemy: on a phone one thumb moves and the other aims,
+   * and there is none left for the trigger. The fire button still works, and this can be turned off.
+   */
+  private autoFire(dt: number): void {
+    const s = useStore.getState().settings;
+    const d = this.def();
+    this.autoT -= dt;
+    if (this.autoT <= 0) {
+      this.autoT = 0.06;
+      let on = false;
+      if ((s.autoFire ?? true) && d && this.me.alive && this.phase !== "freeze" && this.phase !== "end" && !this.buyOpen && !this.picking) {
+        const eye = this.camera.position;
+        const f = this.camera.getWorldDirection(this.v2);
+        const reach = d.melee ? d.melee.range + 0.5 : d.pellets > 3 ? 18 : 75;
+        for (const a of [...this.bots, ...this.boards] as Actor[]) {
+          if (!a.alive || a.protect > 0 || (this.mode.teams && a.team === this.me.team)) continue;
+          const to = a.chest(this.v).sub(eye);
+          const dist = to.length();
+          if (dist > reach) continue;
+          const along = to.dot(f);
+          if (along <= 0) continue;
+          // Within half a body's width of where the sights point, and nothing in between.
+          const off = Math.sqrt(Math.max(0, dist * dist - along * along));
+          if (off > (d.melee ? 0.9 : 0.42 + dist * 0.004)) continue;
+          if (this.sees(this.me, a)) {
+            on = true;
+            break;
+          }
+        }
+      }
+      this.autoOn = on;
+    }
+    if (!this.autoOn) {
+      if (!this.fireHeld) this.trigger = false;
+      return;
+    }
+    // A weapon that charges is held until it is full, then let go.
+    if (d?.mode === "charge") this.trigger = this.fireHeld || this.charge < 0.98;
+    else {
+      this.trigger = true;
+      if (this.cooldown <= 0) this.pressed = true;
+    }
   }
 
   /** Before a side is chosen: the map from above, turning slowly. */
@@ -2430,9 +2535,11 @@ export class Arena {
     me.protect -= dt;
     const k = this.keys;
     const held = this.phase === "freeze" || this.buyOpen || useArena.getState().action !== null;
-    const f = held ? 0 : (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0);
-    const r = held ? 0 : (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0);
-    const sprint = k.has("ShiftLeft") && f > 0 && !this.aiming;
+    // Keys, or the stick: pushed all the way forward, the stick runs.
+    const push = Math.hypot(this.stick.x, this.stick.y);
+    const f = held ? 0 : (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0) - this.stick.y;
+    const r = held ? 0 : (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0) + this.stick.x;
+    const sprint = (k.has("ShiftLeft") || (push > 0.92 && -this.stick.y > 0.75)) && f > 0 && !this.aiming;
     // A blade is light: no slowing down to aim, and a little faster on the feet.
     const blade = !!this.def()?.melee;
     const max = (sprint ? 7.6 : this.aiming && !blade ? 3.6 : 5.6) * (blade ? 1.1 : 1);
@@ -2442,8 +2549,10 @@ export class Arena {
     let dz = -cos * f - sin * r;
     const len = Math.hypot(dx, dz);
     if (len > 0) {
-      dx = (dx / len) * max;
-      dz = (dz / len) * max;
+      // A stick pushed part of the way walks slowly.
+      const pace = max * (push > 0 ? Math.min(1, Math.max(0.35, push)) : 1);
+      dx = (dx / len) * pace;
+      dz = (dz / len) * pace;
     }
     const accel = 1 - Math.exp(-(this.grounded ? 16 : 4) * dt);
     this.vel.x += (dx - this.vel.x) * accel;
@@ -2485,6 +2594,7 @@ export class Arena {
     this.updateMe(dt);
     this.world.step();
     for (const b of this.bots) b.update(dt);
+    if (TOUCH) this.autoFire(dt);
     this.updateDrops(dt);
     this.updateCorpses(dt);
     this.updateBomb(dt);

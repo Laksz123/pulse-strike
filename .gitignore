@@ -6,3 +6,5 @@ target
 .anchor
 test-ledger
 .keys
+.vercel
+.env*

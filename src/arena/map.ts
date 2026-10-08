@@ -8,6 +8,7 @@
 import RAPIER from "@dimforge/rapier3d-compat";
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { LIGHT } from "../device";
 import { pbr } from "./models";
 import { neon } from "./neon";
 import { oasis } from "./oasis";
@@ -250,6 +251,7 @@ type Door = { side: "n" | "s" | "w" | "e"; at: number; w: number };
 export class Kit {
   readonly nav: Nav;
   private floors: Floor[] = [];
+  private lamps = 0;
   private batches = new Map<string, { material: THREE.Material; geos: THREE.BufferGeometry[]; shadow: boolean }>();
   private mats = new Map<string, THREE.MeshStandardMaterial>();
   private m4 = new THREE.Matrix4();
@@ -561,6 +563,8 @@ export class Kit {
   }
 
   light(x: number, y: number, z: number, color: number, intensity: number, distance: number): void {
+    // Every lamp is paid for on every surface: a phone gets the first few and no more.
+    if (LIGHT && ++this.lamps > 3) return;
     const l = new THREE.PointLight(color, intensity, distance, 1.6);
     l.position.set(x, y, z);
     this.scene.add(l);
@@ -732,7 +736,7 @@ export class Kit {
   sun(color: number, intensity: number, x: number, y: number, z: number, skyC: number, groundC: number, ambient: number): void {
     const sun = new THREE.DirectionalLight(color, intensity);
     sun.position.set(x, y, z);
-    sun.castShadow = true;
+    sun.castShadow = !LIGHT;
     sun.shadow.mapSize.set(2048, 2048);
     const sc = sun.shadow.camera;
     sc.left = -50;

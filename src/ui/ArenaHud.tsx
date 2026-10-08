@@ -5,7 +5,9 @@ import { CAT_NAMES, CAT_ORDER, MARKERS, MARKER_BY_ID } from "../arena/markers";
 import { agentIcon, markerIcon } from "../arena/render";
 import { useArena } from "../arena/state";
 import { levelOf, levelProgress, useStore } from "../store";
+import { TOUCH } from "../device";
 import { Radar } from "./Radar";
+import { Touch, tapKey } from "./Touch";
 
 const hex = (c: number) => `#${c.toString(16).padStart(6, "0")}`;
 const clock = (t: number) => `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
@@ -123,7 +125,7 @@ function Loadout() {
       {cur && (
         <div className="a-ammo">
           <span>{MARKER_BY_ID[cur.id].name}</span>
-          {MARKER_BY_ID[cur.id].melee ? <small><kbd>ЛКМ</kbd> взмах · <kbd>ПКМ</kbd> удар · <kbd>F</kbd> осмотреть</small> : (
+          {MARKER_BY_ID[cur.id].melee ? (TOUCH ? null : <small><kbd>ЛКМ</kbd> взмах · <kbd>ПКМ</kbd> удар · <kbd>F</kbd> осмотреть</small>) : (
             <>
               <b>{s.reloading ? "··" : s.mag}</b>
               <small>{s.reloading ? "перезарядка" : `/ ${s.reserve > 9000 ? "∞" : s.reserve}`}</small>
@@ -133,18 +135,18 @@ function Loadout() {
       )}
       <div className="a-slots">
         {s.slots.map((it, i) => (
-          <div key={i} className={`a-slot${i === s.slot ? " on" : ""}${it ? "" : " empty"}`}>
+          <div key={i} className={`a-slot${i === s.slot ? " on" : ""}${it ? "" : " empty"}`} onPointerDown={(e) => { e.stopPropagation(); if (it) tapKey(`Digit${i + 1}`); }}>
             {it && <img src={markerIcon(it.id, it.skin)} alt="" draggable={false} />}
             <span>{i + 1}</span>
           </div>
         ))}
         {NADE_ORDER.map((k) => (s.nades[k] ?? 0) > 0 && (
-          <div key={k} className={`a-slot nade ${k}`} title={NADES[k].name}>
+          <div key={k} className={`a-slot nade ${k}`} title={NADES[k].name} onPointerDown={(e) => { e.stopPropagation(); tapKey(`Digit${NADES[k].key}`); }}>
             <b>{NADES[k].name}</b>
             <span>{NADES[k].key}</span>
           </div>
         ))}
-        {s.hasBomb && <div className="a-slot bomb"><b>💣</b><span>G</span></div>}
+        {s.hasBomb && <div className="a-slot bomb" onPointerDown={(e) => { e.stopPropagation(); tapKey("KeyG"); }}><b>💣</b><span>G</span></div>}
       </div>
     </div>
   );
@@ -225,7 +227,7 @@ function Prompt() {
           <span>{action.label}</span>
           <div className="a-bar"><div style={{ width: `${Math.min(1, action.progress) * 100}%` }} /></div>
         </div>
-      ) : hint ? <div className="a-hint">{hint}</div> : null}
+      ) : hint ? <div className="a-hint">{TOUCH ? hint.replace("Удерживай E — ", "Удерживай кнопку: ").replace("E — ", "").replace(" · G — бросить", "") : hint}</div> : null}
     </>
   );
 }
@@ -296,7 +298,7 @@ function Buy({ arena }: { arena: React.RefObject<Arena | null> }) {
           {phase === "freeze" && <span className="a-buy-time">до начала раунда {time} с</span>}
           {!canBuy && <span className="a-buy-time">время закупки вышло</span>}
           <span className="spacer" />
-          <button className="btn small" onClick={() => arena.current?.closeBuy()}>Готово · B</button>
+          <button className="btn small" onClick={() => arena.current?.closeBuy()}>{TOUCH ? "Готово" : "Готово · B"}</button>
         </div>
         <div className="a-buy-cols">
           {(["side", ...CAT_ORDER] as const).map((cat) => {
@@ -419,13 +421,14 @@ export function ArenaHud({ arena, onAgain }: { arena: React.RefObject<Arena | nu
   }
   return (
     <div className="hud a-hud">
+      {TOUCH && !result && !paused && !buyOpen && !teamPick && <Touch arena={arena} />}
       {!range && <Radar />}
       {teamPick && !result && <TeamPick arena={arena} />}
       <Marks />
       <Reticle />
       <Damage />
       <Blind />
-      {range ? <div className="a-range"><b>Полигон</b><span><kbd>B</kbd> любое оружие · <kbd>3</kbd> нож · <kbd>4</kbd> Клякса · <kbd>5</kbd> Пена · <kbd>6</kbd> Лава · <kbd>Esc</kbd> выход</span></div> : <Top />}
+      {range ? <div className="a-range"><b>Полигон</b>{!TOUCH && <span><kbd>B</kbd> любое оружие · <kbd>3</kbd> нож · <kbd>4</kbd> Клякса · <kbd>5</kbd> Пена · <kbd>6</kbd> Лава · <kbd>Esc</kbd> выход</span>}</div> : <Top />}
       <Feed />
       <Vitals />
       <Loadout />
@@ -447,16 +450,32 @@ export function ArenaHud({ arena, onAgain }: { arena: React.RefObject<Arena | nu
             <h2>Пауза</h2>
             <p className="hint">{modeName} · {mapName}</p>
             <button className="btn primary" onClick={() => arena.current?.lock()}>Продолжить</button>
-            <label className="setting">
-              Чувствительность мыши <b>{settings.sens.toFixed(1)}</b>
-              <input type="range" min="0.3" max="3" step="0.1" value={settings.sens} onChange={(e) => setSettings({ sens: Number(e.target.value) })} />
-            </label>
+            {TOUCH ? (
+              <>
+                <label className="setting">
+                  Скорость поворота <b>{settings.touchSens.toFixed(1)}</b>
+                  <input type="range" min="0.3" max="3" step="0.1" value={settings.touchSens} onChange={(e) => setSettings({ touchSens: Number(e.target.value) })} />
+                </label>
+                <label className="setting row">
+                  <input type="checkbox" checked={settings.autoFire} onChange={(e) => setSettings({ autoFire: e.target.checked })} />
+                  Автоогонь: стреляет сам, когда прицел на противнике
+                </label>
+              </>
+            ) : (
+              <label className="setting">
+                Чувствительность мыши <b>{settings.sens.toFixed(1)}</b>
+                <input type="range" min="0.3" max="3" step="0.1" value={settings.sens} onChange={(e) => setSettings({ sens: Number(e.target.value) })} />
+              </label>
+            )}
+            {teams && !range && (
+              <button className="btn" onClick={() => { arena.current?.lock(); arena.current?.openTeams(); }}>Сменить сторону</button>
+            )}
             <label className="setting">
               Звуки <b>{Math.round(settings.sound * 100)}%</b>
               <input type="range" min="0" max="1" step="0.05" value={settings.sound} onChange={(e) => setSettings({ sound: Number(e.target.value) })} />
             </label>
             <button className="btn" onClick={() => arena.current?.finish()}>{range ? "Выйти в меню" : "Закончить матч и забрать награду"}</button>
-            <p className="hint">
+            <p className="hint" hidden={TOUCH}>
               <kbd>ЛКМ</kbd> огонь · <kbd>ПКМ</kbd> прицел · <kbd>R</kbd> перезарядка · <kbd>1</kbd> <kbd>2</kbd> <kbd>Q</kbd> оружие · <kbd>3</kbd> нож · <kbd>F</kbd> осмотреть<br />
               <kbd>B</kbd> закупка · <kbd>4</kbd> <kbd>5</kbd> <kbd>6</kbd> гранаты · <kbd>E</kbd> заложить / обезвредить / подобрать · <kbd>G</kbd> бросить бомбу · <kbd>M</kbd> сменить сторону · <kbd>Tab</kbd> таблица
             </p>

@@ -4,6 +4,7 @@
  * like the game. The light and sky follow the map that is selected.
  */
 
+import { LIGHT } from "../device";
 import * as THREE from "three";
 import { texture, type MapId } from "./map";
 import { buildMarker, pbr, type MarkerModel } from "./models";
@@ -58,7 +59,7 @@ export class LobbyScene {
     canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block";
     host.appendChild(canvas);
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, LIGHT ? 1.25 : 2));
     this.renderer.toneMapping = THREE.NeutralToneMapping;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;

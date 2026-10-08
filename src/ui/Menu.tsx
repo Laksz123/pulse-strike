@@ -18,6 +18,7 @@ import { Inventory } from "./Inventory";
 import { Market } from "./Market";
 import { PassPage, RewardIcon } from "./Pass";
 import { Shop } from "./Shop";
+import { TOUCH, goFullscreen } from "../device";
 import { music, sfx } from "../game/audio";
 
 type Mode = "shooter" | "world";
@@ -225,7 +226,7 @@ function Lobby({ go, toWorld }: { go(p: Page): void; toWorld(): void }) {
               Музыка <b>{Math.round(s.settings.music * 100)}%</b>
               <input type="range" min="0" max="1" step="0.05" value={s.settings.music} onChange={(e) => s.setSettings({ music: Number(e.target.value) })} />
             </label>
-            <button className="ps-drop-item" onClick={toWorld}><img src="/art/icon_survival.png" alt="" />Режим выживания</button>
+            {!TOUCH && <button className="ps-drop-item" onClick={toWorld}><img src="/art/icon_survival.png" alt="" />Режим выживания</button>}
             {import.meta.env.DEV && <button className="ps-drop-item" onClick={() => s.unlockAll()} title="Для проверки: все оружие во всех скинах, все ножи и все агенты"><img src="/art/case.png" alt="" />Выдать все скины</button>}
           </div>
         )}
@@ -280,7 +281,7 @@ function Lobby({ go, toWorld }: { go(p: Page): void; toWorld(): void }) {
         {toClaim > 0 && <span className="ps-claim toon">Забрать · {toClaim}</span>}
       </button>
 
-      <button className="ps-cta" onClick={() => s.setScreen("arena")}>
+      <button className="ps-cta" onClick={() => { goFullscreen(); s.setScreen("arena"); }}>
         <b className="toon">В бой</b>
         <small>{mode.id === "range" ? mode.name : `${mode.name} · ${map.name}`}</small>
       </button>

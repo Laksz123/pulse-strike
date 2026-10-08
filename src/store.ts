@@ -123,6 +123,9 @@ export interface Settings {
   /** Volumes, 0..1. */
   sound: number;
   music: number;
+  /** On a phone: how fast a dragged finger turns the view, and whether the weapon fires by itself with the sights on an enemy. */
+  touchSens: number;
+  autoFire: boolean;
 }
 
 export interface Toast {
@@ -360,11 +363,11 @@ function loadMarkers(p: Partial<Profile>, fresh: Profile): Shooter {
 
 function loadSettings(): Settings {
   try {
-    const s = { pixel: false, sens: 1, sound: 1, music: 0.6, ...(JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "{}") as Partial<Settings>) };
+    const s = { pixel: false, sens: 1, sound: 1, music: 0.6, touchSens: 1, autoFire: true, ...(JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "{}") as Partial<Settings>) };
     setVolume(s.sound, s.music);
     return s;
   } catch {
-    return { pixel: false, sens: 1, sound: 1, music: 0.6 };
+    return { pixel: false, sens: 1, sound: 1, music: 0.6, touchSens: 1, autoFire: true };
   }
 }
 

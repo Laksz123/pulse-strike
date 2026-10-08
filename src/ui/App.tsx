@@ -147,10 +147,27 @@ function ArenaView({ onAgain }: { onAgain(): void }) {
   );
 }
 
+/** A phone held upright: everything is laid out for a wide screen, so ask for a turn. */
+function Turn() {
+  return (
+    <div className="turn">
+      <svg viewBox="0 0 64 64" aria-hidden>
+        <rect x="20" y="8" width="24" height="48" rx="5" fill="none" stroke="currentColor" strokeWidth="4" />
+        <path d="M50 20c6 5 8 13 5 21M57 43l-3-9M57 43l-9 2" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <b>Поверни телефон</b>
+      <span>Игра идёт в горизонтальном положении</span>
+    </div>
+  );
+}
+
 export function App() {
   const screen = useStore((s) => s.screen);
   const [round, setRound] = useState(0);
-  if (screen === "menu") return <Menu />;
-  if (screen === "arena") return <ArenaView key={round} onAgain={() => setRound((n) => n + 1)} />;
-  return <GameView />;
+  return (
+    <>
+      {screen === "menu" ? <Menu /> : screen === "arena" ? <ArenaView key={round} onAgain={() => setRound((n) => n + 1)} /> : <GameView />}
+      <Turn />
+    </>
+  );
 }
