@@ -1,12 +1,21 @@
 # PULSE STRIKE
 
+![PULSE STRIKE](docs/banner.jpg)
+
 A Counter-Strike-style team shooter that runs in a browser tab — desktop or phone, nothing to
 install — where every skin a player drops is theirs to sell for SOL.
 
 **[Play the live demo](https://pulse-strike-swart.vercel.app)** ·
+**[Play on iDos Games](https://idosgames.com/app/8C3Q33PG/)** ·
 **[Program on Solana devnet](https://explorer.solana.com/address/4ZHAWqT8mQvowMnt4LEA282koU1FhdUd9RL1htfmbg8V?cluster=devnet)**
 
-Submission to the Colosseum Crypto World's Fair hackathon, Superteam Kazakhstan track.
+Submission to the Colosseum Crypto World's Fair hackathon: Superteam Kazakhstan track and the
+Superteam Kazakhstan × iDos Games side track.
+
+| | |
+| --- | --- |
+| ![A round on Oasis](docs/gameplay.jpg) | ![The lobby](docs/lobby.jpg) |
+| ![The market: listings read from the Solana program](docs/market.jpg) | ![The battle pass](docs/pass.jpg) |
 
 | Name | Role | Contact |
 | --- | --- | --- |
@@ -50,6 +59,8 @@ items makes sense.
 - Ten kinds of cases, each showing what is inside, the odds and what it goes for; a battle pass
   with a free and a premium track; daily and season missions.
 - Phones: touch controls, an interface that fits the screen, lighter graphics.
+- Accounts by iDos Games: play as a guest straight away, or make an account with an e-mail and a
+  code and sign in on any device. A Solana wallet is connected on the same screen.
 
 **On chain**
 
@@ -67,7 +78,8 @@ items makes sense.
 | Chain client | TypeScript · `@solana/web3.js` (instructions built by hand, listings read from program accounts) |
 | Game | TypeScript · three.js · Rapier (WebAssembly physics) · Web Audio |
 | Interface | React · zustand · Vite |
-| Hosting | Vercel |
+| Accounts | iDos Games SDK (`@idosgames/core`): guest, e-mail and idosgames.com sign-in |
+| Hosting | Vercel · iDos Games |
 | Built with | Claude Code (AI coding agent) · OpenAI image generation for art |
 
 ## Architecture
@@ -91,8 +103,11 @@ items makes sense.
 - `programs/pulse_strike/src/lib.rs` — the program: `buy_pass`, `list`, `buy`, `cancel`.
 - `src/solana/chain.ts` — builds the instructions and reads the order book from accounts.
 - `src/solana/wallet.ts` — what the game calls: connect, buy the pass, sell, buy, unlist.
+- `src/idos.ts` — the player's account on iDos Games: guest, e-mail with a code, sign-out.
 - `src/arena/` — the match: maps, bots, weapons, hit detection, rendering.
-- `src/ui/` — menus, the pass, missions, cases, the market, the in-match HUD.
+- `src/ui/` — menus, the sign-in screen, the pass, missions, cases, the market, the in-match HUD.
+- `src/game/` — sound, saved progress, items.
+- `public/art/` — icons and pictures; characters, weapons and maps are built in code.
 
 What is not on chain yet is the item itself: it lives in the player's profile, and a listing
 names it by id and serial number.
@@ -108,7 +123,17 @@ npm install
 npm run dev
 ```
 
-The game is then at http://localhost:5183. `npm run build` type-checks and builds it.
+The game is then at http://localhost:5183. `npm run build` type-checks and builds it into `dist/`.
+
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | The game with live reload on port 5183 |
+| `npm run build` | Type-check and build for a site of its own (Vercel) |
+| `npx vite build --mode idos --outDir dist-idos` | Build with relative paths, to upload to iDos Games |
+
+Controls: WASD to move, mouse to aim and shoot, R to reload, 1–3 or the wheel to switch weapons,
+4–6 for grenades, F to inspect, E to pick up, B to buy, Tab for the scoreboard, Esc for the menu.
+On a phone the controls are on the screen.
 
 To build the program you also need Rust and the Solana CLI:
 
@@ -131,4 +156,5 @@ some devnet SOL from https://faucet.solana.com.
 ## Resources
 
 - Live game: https://pulse-strike-swart.vercel.app
+- On iDos Games: https://idosgames.com/app/8C3Q33PG/
 - Program: `4ZHAWqT8mQvowMnt4LEA282koU1FhdUd9RL1htfmbg8V` (devnet)
