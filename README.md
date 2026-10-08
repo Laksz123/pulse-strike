@@ -32,9 +32,12 @@ Devnet.
 owns a season; a listing is an account that names an item and its price, and buying it pays the
 seller, pays the fee and closes the listing in one transaction. Nothing is held in escrow.
 
-`src/solana/chain.ts` is the client. It talks to the program when `PROGRAM_ID` is set; until the
-program is deployed it uses plain transfers with Memo notes, a protocol described at the top of
-that file. What is not on chain yet is the item itself: it lives in the player's profile.
+The program is live on devnet at
+[`4ZHAWqT8mQvowMnt4LEA282koU1FhdUd9RL1htfmbg8V`](https://explorer.solana.com/address/4ZHAWqT8mQvowMnt4LEA282koU1FhdUd9RL1htfmbg8V?cluster=devnet).
+
+`src/solana/chain.ts` is the client: it builds the program's instructions and reads listings
+straight from its accounts. What is not on chain yet is the item itself: it lives in the player's
+profile, and a listing names it by id and serial number.
 
 ## Running it
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { RARITY } from "../arena/markers";
-import { CLUSTER, LIST_FEE_SOL, MARKET_FEE, TREASURY, short, sol, type Listing } from "../solana/chain";
+import { CLUSTER, LIST_FEE_SOL, MARKET_FEE, TREASURY, onProgram, short, sol, type Listing } from "../solana/chain";
 import { loadBook, unlist, useWallet } from "../solana/wallet";
 import { useStore } from "../store";
 import { BuySheet, SellSheet, ThingCard, WalletChip, thingRarity, thingValid } from "./Trade";
@@ -82,7 +82,7 @@ export function Market({ go }: { go?: (page: "inventory" | "cases" | "shop") => 
           <div className="mkt-how">
             <div><i>1</i><span>Выбери предмет и назначь цену в SOL</span></div>
             <div><i>2</i><span>Лот записывается в сеть Solana и виден всем игрокам</span></div>
-            <div><i>3</i><span>Покупатель платит тебе напрямую · комиссия {MARKET_FEE * 100}% · сбор за лот {LIST_FEE_SOL} SOL</span></div>
+            <div><i>3</i><span>Покупатель платит тебе напрямую · комиссия {MARKET_FEE * 100}% · {onProgram() ? "залог за лот возвращается" : `сбор за лот ${LIST_FEE_SOL} SOL`}</span></div>
           </div>
           <div className="mkt-grid">
             {sellable.map((it) => (

@@ -28,10 +28,10 @@ const BURNER_KEY = "pulse.burner.v1";
 
 /**
  * The game's own program on devnet (`programs/pulse_strike`): the premium pass and the market live
- * in it as accounts. Empty until it is deployed — then everything below falls back to plain
- * transfers with Memo notes, the protocol described at the top of this file.
+ * in it as accounts. With this left empty everything below falls back to plain transfers with
+ * Memo notes, the protocol described at the top of this file, which is how it worked before.
  */
-export const PROGRAM_ID = "";
+export const PROGRAM_ID = "4ZHAWqT8mQvowMnt4LEA282koU1FhdUd9RL1htfmbg8V";
 const PROGRAM = PROGRAM_ID ? new PublicKey(PROGRAM_ID) : null;
 export const onProgram = () => PROGRAM !== null;
 const SEASON_NO = 1;

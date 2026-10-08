@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { AGENT_BY_ID } from "../arena/agents";
 import { MARKER_BY_ID, PATTERNS, RARITY, itemRarity } from "../arena/markers";
-import { CLUSTER, LIST_FEE_SOL, MARKET_FEE, explorer, hasPhantom, short, sol, type Listing } from "../solana/chain";
+import { CLUSTER, LIST_FEE_SOL, MARKET_FEE, explorer, hasPhantom, onProgram, short, sol, type Listing } from "../solana/chain";
 import { buy, connect, disconnect, faucet, loadBook, refreshBalance, sell, useWallet } from "../solana/wallet";
 import { useStore } from "../store";
 import { AgentCard, MarkerCard } from "./Arsenal";
@@ -144,7 +144,7 @@ export function SellSheet({ kind, uid, onClose, onMarket }: { kind: "w" | "a"; u
                   <div><span>Покупатель заплатит</span><b>{fmt(price)} SOL</b></div>
                   <div><span>Комиссия площадки {MARKET_FEE * 100}%</span><b>− {fmt(price * MARKET_FEE)} SOL</b></div>
                   <div className="total"><span>Ты получишь</span><b>{fmt(price * (1 - MARKET_FEE))} SOL</b></div>
-                  <div className="dim"><span>Сбор за выставление, сразу</span><b>{LIST_FEE_SOL} SOL</b></div>
+                  <div className="dim"><span>{onProgram() ? "Залог за лот, вернётся" : "Сбор за выставление, сразу"}</span><b>{onProgram() ? "≈ 0.002" : LIST_FEE_SOL} SOL</b></div>
                 </div>
                 {!w.wallet && <Connect />}
                 {w.error && <div className="t-error">{w.error}</div>}
