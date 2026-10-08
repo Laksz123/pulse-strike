@@ -14,10 +14,10 @@ use anchor_lang::prelude::*;
 use anchor_lang::system_program::{self, Transfer};
 
 // Replaced with the program's real address when it is deployed.
-declare_id!("11111111111111111111111111111111");
+declare_id!("4ZHAWqT8mQvowMnt4LEA282koU1FhdUd9RL1htfmbg8V");
 
 /// Where the pass price and the market's cut go.
-pub const TREASURY: Pubkey = anchor_lang::solana_program::pubkey!("691rAh7nKkyXAMrZfk2wmK453K2HkxQaKnjsrkEKrt4E");
+pub const TREASURY: Pubkey = pubkey!("691rAh7nKkyXAMrZfk2wmK453K2HkxQaKnjsrkEKrt4E");
 /// The premium pass: 0.05 SOL a season.
 pub const PASS_PRICE: u64 = 50_000_000;
 /// The market keeps five percent of a sale.
