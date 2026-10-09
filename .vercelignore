@@ -4,3 +4,9 @@
 node_modules
 dist
 .claude
+pitch
+target
+dist-idos
+test-ledger
+.anchor
+docs
