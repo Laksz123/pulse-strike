@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { AGENT_BY_ID } from "../arena/agents";
 import { MARKER_BY_ID, PATTERNS, RARITY, itemRarity } from "../arena/markers";
-import { CLUSTER, LIST_FEE_SOL, MARKET_FEE, explorer, hasPhantom, onProgram, short, sol, type Listing } from "../solana/chain";
+import { CLUSTER, LIST_FEE_SOL, MARKET_FEE, explorer, onProgram, short, sol, type Listing } from "../solana/chain";
 import { buy, connect, disconnect, faucet, loadBook, refreshBalance, sell, useWallet } from "../solana/wallet";
 import { useStore } from "../store";
 import { AgentCard, MarkerCard } from "./Arsenal";
+import { PhantomButton } from "./Phantom";
 
 export type Thing = { kind: "w" | "a"; id: string; skin: number };
 
@@ -20,17 +21,11 @@ export function ThingCard({ t, tag, onClick, selected }: { t: Thing; tag?: strin
 /** The wallet in one line: who is connected and what they have; or two ways to connect. */
 export function WalletChip() {
   const w = useWallet();
-  const [phantom, setPhantom] = useState(hasPhantom());
-  // Phantom injects itself a moment after the page loads.
-  useEffect(() => {
-    const t = setTimeout(() => setPhantom(hasPhantom()), 800);
-    return () => clearTimeout(t);
-  }, []);
   if (!w.wallet) {
     return (
       <div className="w-chip off">
         <span>Кошелёк не подключён · Solana {CLUSTER}</span>
-        <button className="pg-btn sol" disabled={!phantom || !!w.busy} onClick={() => void connect("phantom")}>{phantom ? "Phantom" : "Phantom не найден"}</button>
+        <PhantomButton className="pg-btn sol" />
         <button className="pg-btn" disabled={!!w.busy} onClick={() => void connect("burner")} title="Создаётся прямо здесь и хранится в этом браузере: чтобы попробовать без расширения">Тестовый кошелёк</button>
       </div>
     );
@@ -54,7 +49,7 @@ function Connect() {
     <div className="t-connect">
       <span>Чтобы торговать, нужен кошелёк Solana ({CLUSTER}).</span>
       <div>
-        <button className="pg-btn sol" disabled={!hasPhantom() || !!w.busy} onClick={() => void connect("phantom")}>{hasPhantom() ? "Подключить Phantom" : "Phantom не найден"}</button>
+        <PhantomButton className="pg-btn sol" label="Подключить Phantom" />
         <button className="pg-btn" disabled={!!w.busy} onClick={() => void connect("burner")}>Тестовый кошелёк</button>
       </div>
     </div>

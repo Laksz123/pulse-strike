@@ -1,9 +1,18 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { agentIcon } from "../arena/render";
 import { sfx } from "../game/audio";
 import { CAN_SSO, boot, confirm, guest, login, logout, register, rename, resend, retype, shortId, useAccount, viaIdos } from "../idos";
-import { hasPhantom, short } from "../solana/chain";
+import { short } from "../solana/chain";
 import { connect, disconnect, useWallet } from "../solana/wallet";
+import { PhantomButton } from "./Phantom";
+
+/**
+ * Enter in a field does what the button beside it does. These are not forms: the page of
+ * iDos Games shows the game in a frame where forms are not allowed to be sent.
+ */
+const onEnter = (run: () => void) => (e: KeyboardEvent) => {
+  if (e.key === "Enter") run();
+};
 
 /** The wallet row: the same two ways in as on the market, or the address once one is connected. */
 function WalletRow() {
@@ -23,7 +32,7 @@ function WalletRow() {
     <div className="ac-wallet">
       <i />
       <span><b>Кошелёк Solana</b><small>для маркета и премиума</small></span>
-      <button className="sol" disabled={!hasPhantom() || !!busy} onClick={() => void connect("phantom")}>{hasPhantom() ? "Phantom" : "Phantom не найден"}</button>
+      <PhantomButton className="sol" />
       <button disabled={!!busy} onClick={() => void connect("burner")} title="Создаётся прямо здесь и хранится в этом браузере">Тестовый</button>
     </div>
   );
@@ -35,21 +44,18 @@ function Code() {
   const busy = useAccount((a) => a.busy);
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    void confirm(code);
-  };
+  const submit = () => void confirm(code);
   return (
-    <form className="ac-form" noValidate onSubmit={submit}>
+    <div className="ac-form">
       <b className="ac-title">Код из письма</b>
       <p>Отправили код на <b>{email}</b>. Письмо приходит за минуту; загляни и в «Спам».</p>
-      <input className="ac-code" inputMode="numeric" autoComplete="one-time-code" maxLength={8} placeholder="000000" value={code} autoFocus onChange={(e) => setCode(e.target.value.replace(/\s/g, ""))} />
-      <button className="ac-submit" disabled={!!busy || code.length < 4}><b className="toon">{busy || "Подтвердить"}</b></button>
+      <input className="ac-code" inputMode="numeric" autoComplete="one-time-code" maxLength={8} placeholder="000000" value={code} autoFocus onChange={(e) => setCode(e.target.value.replace(/\s/g, ""))} onKeyDown={onEnter(submit)} />
+      <button className="ac-submit" disabled={!!busy || code.length < 4} onClick={submit}><b className="toon">{busy || "Подтвердить"}</b></button>
       <div className="ac-links">
         <button type="button" onClick={retype}>← Другая почта</button>
         <button type="button" disabled={!!busy} onClick={() => { setSent(true); void resend(); }}>{sent ? "Отправили ещё раз" : "Отправить код ещё раз"}</button>
       </div>
-    </form>
+    </div>
   );
 }
 
@@ -59,26 +65,23 @@ function Form() {
   const [fresh, setFresh] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    void (fresh ? register(email, password) : login(email, password));
-  };
+  const submit = () => void (fresh ? register(email, password) : login(email, password));
   const tab = (to: boolean) => () => {
     sfx.click();
     setFresh(to);
     useAccount.setState({ error: "" });
   };
   return (
-    <form className="ac-form" noValidate onSubmit={submit}>
+    <div className="ac-form">
       <div className="ac-tabs">
         <button type="button" className={fresh ? "" : "on"} onClick={tab(false)}>Вход</button>
         <button type="button" className={fresh ? "on" : ""} onClick={tab(true)}>Регистрация</button>
       </div>
-      <input type="email" autoComplete="email" placeholder="Почта" value={email} onChange={(e) => setEmail(e.target.value)} />
-      <input type="password" autoComplete={fresh ? "new-password" : "current-password"} placeholder={fresh ? "Пароль — от 8 символов" : "Пароль"} value={password} onChange={(e) => setPassword(e.target.value)} />
-      <button className="ac-submit" disabled={!!busy}><b className="toon">{busy || (fresh ? "Создать аккаунт" : "Войти")}</b></button>
+      <input type="email" autoComplete="email" placeholder="Почта" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={onEnter(submit)} />
+      <input type="password" autoComplete={fresh ? "new-password" : "current-password"} placeholder={fresh ? "Пароль — от 8 символов" : "Пароль"} value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={onEnter(submit)} />
+      <button className="ac-submit" disabled={!!busy} onClick={submit}><b className="toon">{busy || (fresh ? "Создать аккаунт" : "Войти")}</b></button>
       {CAN_SSO && <button type="button" className="ac-sso" disabled={!!busy} onClick={() => void viaIdos()}>Войти через iDos Games</button>}
-    </form>
+    </div>
   );
 }
 
@@ -128,8 +131,7 @@ export function AccountPanel() {
   const [name, setName] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
-  const save = async (e: FormEvent) => {
-    e.preventDefault();
+  const save = async () => {
     if (name === null || saving) return;
     setSaving(true);
     const wrong = await rename(name);
@@ -147,10 +149,10 @@ export function AccountPanel() {
       {name === null ? (
         a.id && <button className="ac-line" onClick={() => { setName(a.name); setNote(""); }}>Сменить ник</button>
       ) : (
-        <form className="ac-nick" onSubmit={save}>
-          <input value={name} maxLength={16} autoFocus onChange={(e) => setName(e.target.value)} />
-          <button disabled={saving}>{saving ? "…" : "OK"}</button>
-        </form>
+        <div className="ac-nick">
+          <input value={name} maxLength={16} autoFocus onChange={(e) => setName(e.target.value)} onKeyDown={onEnter(() => void save())} />
+          <button disabled={saving} onClick={() => void save()}>{saving ? "…" : "OK"}</button>
+        </div>
       )}
       {note && <span className="ac-note">{note}</span>}
       <WalletRow />

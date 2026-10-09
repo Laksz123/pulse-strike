@@ -89,10 +89,21 @@ interface PhantomProvider {
   signAndSendTransaction(tx: Transaction): Promise<{ signature: string }>;
 }
 
+/**
+ * Whether the game is shown inside another site's page. There a wallet is out of reach: iDos Games
+ * forbids a framed game to touch one — reading it throws, and the try is reported.
+ */
+export const FRAMED = typeof window !== "undefined" && window.top !== window.self;
+
 function phantom(): PhantomProvider | null {
-  const w = window as unknown as { phantom?: { solana?: PhantomProvider }; solana?: PhantomProvider };
-  const p = w.phantom?.solana ?? w.solana;
-  return p?.isPhantom ? p : null;
+  if (FRAMED) return null;
+  try {
+    const w = window as unknown as { phantom?: { solana?: PhantomProvider }; solana?: PhantomProvider };
+    const p = w.phantom?.solana ?? w.solana;
+    return p?.isPhantom ? p : null;
+  } catch {
+    return null;
+  }
 }
 
 export const hasPhantom = () => phantom() !== null;
